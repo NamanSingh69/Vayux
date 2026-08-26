@@ -18,7 +18,7 @@ export function PolicySandbox() {
   const runSimulation = async () => {
     setLoading(true);
     try {
-      const res = await fetch("https://vayux.onrender.com/api/v1/policy/simulate", {
+      const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
