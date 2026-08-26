@@ -8,7 +8,9 @@ import type { AqiApiResponse, StationProperties } from "@/lib/aqi/types";
 import { CPCB_AQI_SCALE, getAqiColor } from "@/lib/aqi/cpcb";
 import { AqiLegend } from "./aqi-legend";
 import { MapStatus } from "./map-status";
+import { PolicySandbox } from "./policy-sandbox";
 import styles from "./map.module.css";
+import { ForecastTimeline } from "./forecast-timeline";
 
 const EMPTY_GEOJSON = { type: "FeatureCollection" as const, features: [] };
 const REFRESH_MS = 12 * 60 * 1000;
@@ -250,9 +252,33 @@ export function DelhiAqiMap() {
     return () => window.clearInterval(interval);
   }, [loadAqi]);
 
+  const handleForecastChange = useCallback(
+    (_hour: number, multiplier: number) => {
+      if (!dataRef.current || !mapRef.current) return;
+      const baseData = dataRef.current;
+
+      const modulatedSurface = {
+        ...baseData.surface,
+        features: (baseData.surface?.features ?? []).map((f) => ({
+          ...f,
+          properties: {
+            ...f.properties,
+            aqi: Math.min(Math.round((f.properties?.aqi ?? 200) * multiplier), 500),
+          },
+        })),
+      };
+
+      const surfaceSource = mapRef.current.getSource(SURFACE_SOURCE) as GeoJSONSource | undefined;
+      surfaceSource?.setData(modulatedSurface);
+    },
+    []
+  );
+
   return (
     <main className={styles.mapPage}>
       <div ref={containerRef} className={styles.map} aria-label="Interactive Delhi NCR air quality map" />
+      <PolicySandbox />
+      <ForecastTimeline onHourChange={handleForecastChange} />
       <MapStatus state={state} updatedAt={updatedAt} />
       <AqiLegend />
     </main>

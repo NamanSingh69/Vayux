@@ -22,18 +22,42 @@ export async function fetchNcrCpcbRecords(): Promise<DataGovRecord[]> {
     url.searchParams.set("limit", "1000");
     url.searchParams.set("filters[state]", state);
 
-    const response = await fetch(url, {
-      next: { revalidate: 900 },
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`data.gov.in returned ${response.status} for ${state}`);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const data = (await response.json()) as DataGovResponse;
-    if (!Array.isArray(data.records)) {
-      throw new Error(data.message ? `data.gov.in (${state}): ${data.message}` : `data.gov.in returned no ${state} records`);
+      const response = await fetch(url, {
+        next: { revalidate: 900 }, 
+        headers: { Accept: "application/json" },
+        signal: controller.signal, 
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.warn(`[API Warning] data.gov.in returned ${response.status} for ${state}`);
+        return [];
+      }
+
+      const data = (await response.json()) as DataGovResponse;
+      if (!Array.isArray(data.records)) {
+        console.warn(`[API Warning] Invalid payload for ${state}: ${data.message || 'No records'}`);
+        return [];
+      }
+      
+      return data.records;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.warn(`[Network Warning] Failed to fetch records for ${state}:`, msg);
+      return []; 
     }
-    return data.records;
   }));
 
-  return responses.flat();
+  const flatRecords = responses.flat();
+
+  if (flatRecords.length === 0) {
+    throw new Error("All government API requests failed or timed out. Please check network connection or API key.");
+  }
+
+  return flatRecords;
 }
