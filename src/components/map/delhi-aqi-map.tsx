@@ -247,8 +247,15 @@ export function DelhiAqiMap() {
   }, [paintAqiData]);
 
   useEffect(() => {
-    void loadAqi();
-    const interval = window.setInterval(() => void loadAqi(), REFRESH_MS);
+    const fetchInitialData = async () => {
+      await loadAqi();
+    };
+
+    void fetchInitialData();
+    const interval = window.setInterval(() => {
+      void loadAqi();
+    }, REFRESH_MS);
+
     return () => window.clearInterval(interval);
   }, [loadAqi]);
 
