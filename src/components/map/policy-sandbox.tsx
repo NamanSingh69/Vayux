@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import styles from "./map.module.css";
 
 interface SimulationResult {
   baseline_aqi: number;
@@ -9,7 +10,11 @@ interface SimulationResult {
   percentage_improvement: number;
 }
 
-export function PolicySandbox() {
+interface PolicySandboxProps {
+  baselineAqi: number;
+}
+
+export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
   const [vehicular, setVehicular] = useState(1.0);
   const [stubble, setStubble] = useState(1.0);
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -22,7 +27,7 @@ export function PolicySandbox() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseline_aqi: 340,
+          baseline_aqi: baselineAqi,
           baseline_pm25: 260.0,
           vehicular: vehicular,
           stubble: stubble,
@@ -39,63 +44,55 @@ export function PolicySandbox() {
   };
 
   return (
-    <div style={{
-      position: "absolute", top: "20px", right: "20px", width: "320px",
-      background: "rgba(9, 9, 9, 0.85)", backdropFilter: "blur(12px)",
-      border: "1px solid #222", borderRadius: "12px", padding: "20px",
-      color: "#fff", fontFamily: "Inter, sans-serif", zIndex: 10,
-      boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
-    }}>
-      <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: 600, fontFamily: "Mona Sans, sans-serif" }}>
-        Policy Mitigation Sandbox
-      </h3>
+    <aside className={styles.sandbox} aria-label="Policy mitigation sandbox">
+      <div className={styles.panelHeader}>
+        <span className={styles.panelIcon}>∫</span>
+        <div>
+          <h2>Policy Sandbox</h2>
+          <p>Run source-control scenarios against the current baseline.</p>
+        </div>
+      </div>
 
-      <div style={{ marginBottom: "16px" }}>
-        <label style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#aaa", marginBottom: "8px" }}>
+      <div className={styles.controlGroup}>
+        <label>
           <span>Stubble Burning (Punjab/Haryana)</span>
           <span>{Math.round(stubble * 100)}%</span>
         </label>
         <input 
           type="range" min="0" max="1" step="0.1" value={stubble} 
           onChange={(e) => setStubble(parseFloat(e.target.value))}
-          style={{ width: "100%", accentColor: "#ef972e", cursor: "pointer" }} 
         />
       </div>
 
-      <div style={{ marginBottom: "24px" }}>
-        <label style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#aaa", marginBottom: "8px" }}>
+      <div className={styles.controlGroup}>
+        <label>
           <span>Vehicular Emissions (Delhi NCR)</span>
           <span>{Math.round(vehicular * 100)}%</span>
         </label>
         <input 
           type="range" min="0" max="1" step="0.1" value={vehicular} 
           onChange={(e) => setVehicular(parseFloat(e.target.value))}
-          style={{ width: "100%", accentColor: "#e44a3a", cursor: "pointer" }} 
         />
       </div>
 
       <button 
         onClick={runSimulation}
         disabled={loading}
-        style={{
-          width: "100%", padding: "10px", borderRadius: "6px", border: "none",
-          background: loading ? "#333" : "#fff", color: loading ? "#888" : "#000",
-          fontWeight: 600, cursor: loading ? "wait" : "pointer", transition: "all 0.2s"
-        }}>
-        {loading ? "Running Physics Engine..." : "Simulate Impact"}
+        className={styles.runButton}>
+        {loading ? "Running..." : "Run Simulation"}
       </button>
 
       {result && (
-        <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #333" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: "13px", color: "#888" }}>Simulated AQI</span>
-            <span style={{ fontSize: "24px", fontWeight: 700, color: "#34a853" }}>{result.simulated_aqi}</span>
+        <div className={styles.simResult}>
+          <div>
+            <span>Simulated AQI</span>
+            <strong>{result.simulated_aqi}</strong>
           </div>
-          <div style={{ fontSize: "12px", color: "#aaa", marginTop: "4px" }}>
+          <p>
             AQI improved by {result.percentage_improvement}% due to secondary PBL expansion.
-          </div>
+          </p>
         </div>
       )}
-    </div>
+    </aside>
   );
 }

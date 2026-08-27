@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { CPCB_AQI_SCALE } from "@/lib/aqi/cpcb";
+import styles from "./map.module.css";
 
 interface ForecastTimelineProps {
   onHourChange?: (hourOffset: number, simulatedMultiplier: number) => void;
+  baselineAqi: number;
 }
 
-export function ForecastTimeline({ onHourChange }: ForecastTimelineProps) {
+export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimelineProps) {
   const [selectedHour, setSelectedHour] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
@@ -20,7 +22,7 @@ export function ForecastTimeline({ onHourChange }: ForecastTimelineProps) {
 
       const hourOfDay = now.getHours();
       const diurnalFactor = 1.0 + 0.35 * Math.sin(((hourOfDay - 9) * Math.PI) / 12);
-      const syntheticAqi = Math.round(260 * diurnalFactor);
+      const syntheticAqi = Math.round(baselineAqi * diurnalFactor);
 
       return {
         hour,
@@ -29,7 +31,7 @@ export function ForecastTimeline({ onHourChange }: ForecastTimelineProps) {
         multiplier: diurnalFactor,
       };
     });
-  }, []);
+  }, [baselineAqi]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -57,49 +59,22 @@ export function ForecastTimeline({ onHourChange }: ForecastTimelineProps) {
   const aqiColor = CPCB_AQI_SCALE.find((s) => currentItem.aqi <= s.max)?.color ?? "#8f273b";
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: "80px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "min(680px, 90vw)",
-        background: "rgba(9, 9, 9, 0.9)",
-        backdropFilter: "blur(14px)",
-        border: "1px solid #222",
-        borderRadius: "14px",
-        padding: "16px 20px",
-        color: "#fff",
-        fontFamily: "Inter, sans-serif",
-        zIndex: 10,
-        boxShadow: "0 14px 40px rgba(0,0,0,0.65)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+    <aside className={styles.forecast} aria-label="Forecast timeline" style={{ "--forecast-accent": aqiColor } as React.CSSProperties}>
+      <div className={styles.forecastTop}>
+        <div>
           <button
             onClick={() => setIsPlaying(!isPlaying)}
-            style={{
-              background: isPlaying ? "#e44a3a" : "#fff",
-              color: isPlaying ? "#fff" : "#000",
-              border: "none",
-              borderRadius: "6px",
-              padding: "5px 12px",
-              fontSize: "12px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
           >
             {isPlaying ? "Pause" : "Play 72h"}
           </button>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "#ccc" }}>
+          <span>
             {selectedHour === 0 ? "Live Monitoring (Now)" : `+${selectedHour}h Forecast (${currentItem.label})`}
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "12px", color: "#888" }}>Predicted Regional AQI:</span>
-          <span style={{ fontSize: "16px", fontWeight: 800, color: aqiColor }}>{currentItem.aqi}</span>
+        <div>
+          <span>Predicted AQI</span>
+          <strong>{currentItem.aqi}</strong>
         </div>
       </div>
 
@@ -110,20 +85,14 @@ export function ForecastTimeline({ onHourChange }: ForecastTimelineProps) {
         step={1}
         value={selectedHour}
         onChange={(e) => setSelectedHour(parseInt(e.target.value, 10))}
-        style={{
-          width: "100%",
-          accentColor: aqiColor,
-          cursor: "pointer",
-          marginBottom: "8px",
-        }}
       />
 
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#666" }}>
+      <div className={styles.forecastTicks}>
         <span>Now</span>
         <span>+24 Hours</span>
         <span>+48 Hours</span>
         <span>+72 Hours</span>
       </div>
-    </div>
+    </aside>
   );
 }

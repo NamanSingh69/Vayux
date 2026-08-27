@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import { type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
 import gsap from "gsap";
@@ -27,8 +27,10 @@ export function DelhiAqiMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const dataRef = useRef<AqiApiResponse | null>(null);
+  const [aqiData, setAqiData] = useState<AqiApiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<string>();
+  const [stationQuery, setStationQuery] = useState("");
 
   const paintAqiData = useCallback((payload: AqiApiResponse | null) => {
     const map = mapRef.current;
@@ -50,6 +52,7 @@ export function DelhiAqiMap() {
       }
       const payload = (await response.json()) as AqiApiResponse;
       dataRef.current = payload;
+      setAqiData(payload);
       paintAqiData(payload);
       setUpdatedAt(payload.updatedAt);
       setState("ready");
@@ -57,6 +60,7 @@ export function DelhiAqiMap() {
       // The map remains usable when the hourly government feed is unavailable.
       console.warn("Unable to fetch Delhi NCR AQI map data", error);
       dataRef.current = null;
+      setAqiData(null);
       paintAqiData(null);
       setState("error");
     }
@@ -187,47 +191,7 @@ export function DelhiAqiMap() {
         const feature = event.features?.[0];
         if (!feature || feature.geometry.type !== "Point") return;
         const props = feature.properties as StationProperties;
-        const accent = getAqiColor(props.aqi);
-        const updated = props.updatedAt ? formatUpdate(props.updatedAt) : "Time unavailable";
-        const html = `<p class="aqi-popup-title">${escapeHtml(props.station)}</p><div class="aqi-popup-value"><strong>AQI ${props.aqi}</strong><span>${escapeHtml(props.category)}</span></div><p class="aqi-popup-detail">${escapeHtml(props.dominantPollutant)} · ${escapeHtml(updated)} · CPCB</p>`;
-        const popup = new maplibregl.Popup({ offset: 12, closeButton: true, maxWidth: "230px" })
-          .setLngLat(feature.geometry.coordinates as [number, number])
-          .setHTML(html)
-          .addTo(map);
-        const popupElement = popup.getElement();
-        popupElement.style.setProperty("--aqi-accent", accent);
-        if (!prefersReducedMotion) {
-          const content = popupElement.querySelector<HTMLElement>(".maplibregl-popup-content");
-          const timeline = gsap.timeline();
-          timeline
-            .fromTo(popupElement, { autoAlpha: 0, y: 9, scale: 0.93 }, {
-              autoAlpha: 1,
-              y: 0,
-              scale: 1,
-              duration: 0.3,
-              ease: "back.out(1.3)",
-            })
-            .fromTo(
-              content?.querySelectorAll(".aqi-popup-title, .aqi-popup-value, .aqi-popup-detail") ?? [],
-              { autoAlpha: 0, y: 5 },
-              { autoAlpha: 1, y: 0, duration: 0.24, stagger: 0.035, ease: "power2.out" },
-              "-=0.17",
-            );
-
-          const closeButton = popupElement.querySelector<HTMLButtonElement>(".maplibregl-popup-close-button");
-          closeButton?.addEventListener("click", (closeEvent) => {
-            closeEvent.preventDefault();
-            closeEvent.stopImmediatePropagation();
-            gsap.to(popupElement, {
-              autoAlpha: 0,
-              y: 5,
-              scale: 0.96,
-              duration: 0.18,
-              ease: "power2.in",
-              onComplete: () => popup.remove(),
-            });
-          }, { capture: true, once: true });
-        }
+        openStationPopup(map, feature.geometry.coordinates as [number, number], props, prefersReducedMotion);
       });
 
       paintAqiData(dataRef.current);
@@ -281,15 +245,210 @@ export function DelhiAqiMap() {
     []
   );
 
+  const metrics = useMemo(() => deriveMetrics(aqiData), [aqiData]);
+  const stationOptions = useMemo(
+    () => aqiData?.stations.features
+      .map((feature) => feature.properties.station)
+      .sort((a, b) => a.localeCompare(b)) ?? [],
+    [aqiData],
+  );
+  const matchingStationCount = useMemo(() => {
+    const needle = stationQuery.trim().toLowerCase();
+    if (!needle) return stationOptions.length;
+    return stationOptions.filter((station) => station.toLowerCase().includes(needle)).length;
+  }, [stationOptions, stationQuery]);
+
+  const handleStationSearch = useCallback(() => {
+    const needle = stationQuery.trim().toLowerCase();
+    const match = aqiData?.stations.features.find((feature) =>
+      feature.properties.station.toLowerCase().includes(needle),
+    );
+    const map = mapRef.current;
+    if (!needle || !match || !map) return;
+
+    const coordinates = match.geometry.coordinates as [number, number];
+    map.flyTo({ center: coordinates, zoom: Math.max(map.getZoom(), 11), duration: 650, essential: true });
+    openStationPopup(
+      map,
+      coordinates,
+      match.properties,
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+  }, [aqiData, stationQuery]);
+
   return (
     <main className={styles.mapPage}>
       <div ref={containerRef} className={styles.map} aria-label="Interactive Delhi NCR air quality map" />
-      <PolicySandbox />
-      <ForecastTimeline onHourChange={handleForecastChange} />
-      <MapStatus state={state} updatedAt={updatedAt} />
+      <div className={styles.mapVeil} aria-hidden="true" />
+      <MapStatus state={state} updatedAt={updatedAt} metrics={metrics} />
+      <section className={styles.commandPanel} aria-label="Delhi NCR command center">
+        <form className={styles.searchShell} onSubmit={(event) => { event.preventDefault(); handleStationSearch(); }}>
+          <span aria-hidden="true">⌕</span>
+          <input
+            type="search"
+            placeholder="Search CPCB station..."
+            aria-label="Search CPCB station"
+            list="station-options"
+            value={stationQuery}
+            onChange={(event) => setStationQuery(event.target.value)}
+          />
+          <datalist id="station-options">
+            {stationOptions.map((station) => <option key={station} value={station} />)}
+          </datalist>
+          <button type="submit" aria-label="Go to station">Go</button>
+        </form>
+
+        <div className={styles.regionCard}>
+          <div>
+            <span className={styles.eyebrow}>Target Sector</span>
+            <h1>Delhi NCR</h1>
+          </div>
+          <span className={styles.livePill}>Live</span>
+          <p>
+            {metrics.stationCount
+              ? `${matchingStationCount} of ${metrics.stationCount} CPCB stations available`
+              : "Waiting for CPCB station feed"}
+          </p>
+        </div>
+
+        <div className={styles.primaryMetric} style={{ "--metric-accent": metrics.color } as CSSProperties}>
+          <div className={styles.metricTopline}>
+            <span>Regional AQI</span>
+            <span>{metrics.category}</span>
+          </div>
+          <div className={styles.metricValue}>
+            <strong>{metrics.regionalAqi ?? "--"}</strong>
+            <span>India AQI</span>
+          </div>
+          <div className={styles.metricBar} aria-hidden="true">
+            <span style={{ width: `${metrics.regionalAqi ? Math.min((metrics.regionalAqi / 500) * 100, 100) : 0}%` }} />
+          </div>
+        </div>
+
+        <div className={styles.metricGrid}>
+          <div className={styles.compactMetric}>
+            <span>Peak Station</span>
+            <strong>{metrics.peakAqi ?? "--"}</strong>
+            <small>{metrics.peakStation}</small>
+          </div>
+          <div className={styles.compactMetric}>
+            <span>Driver</span>
+            <strong>{metrics.dominantPollutant}</strong>
+            <small>{metrics.dominantShare}</small>
+          </div>
+        </div>
+      </section>
+      <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
+      <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
       <AqiLegend />
     </main>
   );
+}
+
+interface DashboardMetrics {
+  regionalAqi: number | null;
+  peakAqi: number | null;
+  peakStation: string;
+  category: string;
+  color: string;
+  stationCount: number;
+  dominantPollutant: string;
+  dominantShare: string;
+}
+
+function deriveMetrics(payload: AqiApiResponse | null): DashboardMetrics {
+  const stations = payload?.stations.features ?? [];
+  if (!stations.length) {
+    return {
+      regionalAqi: null,
+      peakAqi: null,
+      peakStation: "No live station",
+      category: "Standby",
+      color: "#a855f7",
+      stationCount: 0,
+      dominantPollutant: "AQI",
+      dominantShare: "Feed offline",
+    };
+  }
+
+  const readings = stations.map((feature) => feature.properties);
+  const total = readings.reduce((sum, item) => sum + item.aqi, 0);
+  const regionalAqi = Math.round(total / readings.length);
+  const peak = readings.reduce((highest, item) => item.aqi > highest.aqi ? item : highest, readings[0]);
+  const pollutantCounts = readings.reduce<Record<string, number>>((counts, item) => {
+    counts[item.dominantPollutant] = (counts[item.dominantPollutant] ?? 0) + 1;
+    return counts;
+  }, {});
+  const [dominantPollutant, count] = Object.entries(pollutantCounts)
+    .sort((a, b) => b[1] - a[1])[0] ?? ["AQI", 0];
+
+  return {
+    regionalAqi,
+    peakAqi: peak.aqi,
+    peakStation: peak.station,
+    category: peak.category,
+    color: getAqiColor(regionalAqi),
+    stationCount: readings.length,
+    dominantPollutant,
+    dominantShare: `${Math.round((count / readings.length) * 100)}% stations`,
+  };
+}
+
+function openStationPopup(
+  map: maplibregl.Map,
+  coordinates: [number, number],
+  props: StationProperties,
+  prefersReducedMotion: boolean,
+) {
+  const accent = getAqiColor(props.aqi);
+  const updated = props.updatedAt ? formatUpdate(props.updatedAt) : "Time unavailable";
+  const html = `
+    <p class="aqi-popup-kicker">${escapeHtml(props.dominantPollutant)} dominant</p>
+    <p class="aqi-popup-title">${escapeHtml(props.station)}</p>
+    <div class="aqi-popup-value">
+      <strong>AQI ${props.aqi}</strong>
+      <span>${escapeHtml(props.category)}</span>
+    </div>
+    <p class="aqi-popup-detail">${escapeHtml(updated)} · CPCB station feed</p>
+  `;
+  const popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: "260px" })
+    .setLngLat(coordinates)
+    .setHTML(html)
+    .addTo(map);
+  const popupElement = popup.getElement();
+  popupElement.style.setProperty("--aqi-accent", accent);
+  if (prefersReducedMotion) return;
+
+  const content = popupElement.querySelector<HTMLElement>(".maplibregl-popup-content");
+  const timeline = gsap.timeline();
+  timeline
+    .fromTo(popupElement, { autoAlpha: 0, y: 9, scale: 0.93 }, {
+      autoAlpha: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.3,
+      ease: "back.out(1.3)",
+    })
+    .fromTo(
+      content?.querySelectorAll(".aqi-popup-kicker, .aqi-popup-title, .aqi-popup-value, .aqi-popup-detail") ?? [],
+      { autoAlpha: 0, y: 5 },
+      { autoAlpha: 1, y: 0, duration: 0.24, stagger: 0.035, ease: "power2.out" },
+      "-=0.17",
+    );
+
+  const closeButton = popupElement.querySelector<HTMLButtonElement>(".maplibregl-popup-close-button");
+  closeButton?.addEventListener("click", (closeEvent) => {
+    closeEvent.preventDefault();
+    closeEvent.stopImmediatePropagation();
+    gsap.to(popupElement, {
+      autoAlpha: 0,
+      y: 5,
+      scale: 0.96,
+      duration: 0.18,
+      ease: "power2.in",
+      onComplete: () => popup.remove(),
+    });
+  }, { capture: true, once: true });
 }
 
 function formatUpdate(value: string): string {

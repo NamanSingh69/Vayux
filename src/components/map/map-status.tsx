@@ -9,6 +9,10 @@ import styles from "./map.module.css";
 interface MapStatusProps {
   state: "loading" | "ready" | "error";
   updatedAt?: string;
+  metrics: {
+    stationCount: number;
+    category: string;
+  };
 }
 
 function timeLabel(updatedAt?: string) {
@@ -18,7 +22,7 @@ function timeLabel(updatedAt?: string) {
   return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(parsed);
 }
 
-export function MapStatus({ state, updatedAt }: MapStatusProps) {
+export function MapStatus({ state, updatedAt, metrics }: MapStatusProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const didMountRef = useRef(false);
@@ -75,11 +79,15 @@ export function MapStatus({ state, updatedAt }: MapStatusProps) {
 
   return (
     <div ref={wrapRef} className={styles.statusWrap} aria-live="polite">
-      <div className={styles.brand}>
+      <header className={styles.brand}>
         <Image className={styles.logo} src={vayuxLogo} alt="VayuX" priority />
-        <span>Live AQI</span>
-      </div>
+        <span>Command Center</span>
+      </header>
       <div ref={statusRef} className={`${styles.status} ${state === "error" ? styles.statusError : ""}`}>{label}</div>
+      <div className={styles.systemPill}>
+        <span />
+        {state === "ready" ? `${metrics.category} · ${metrics.stationCount} stations` : "System nominal"}
+      </div>
     </div>
   );
 }
