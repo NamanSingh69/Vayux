@@ -1,0 +1,534 @@
+{
+  "best_score": 42.3294,
+  "best_params": {
+    "alpha": 0.003251311894681241,
+    "gamma": 0.8373441666756193,
+    "pasquill_a": 0.1444438492559375,
+    "pasquill_b": 0.8626357333207069,
+    "pasquill_c": 0.0832147423433663,
+    "pasquill_d": 0.8494520507403069
+  },
+  "trials_executed": 26,
+  "history": [
+    {
+      "trial_id": 1,
+      "score": -175.4106,
+      "params": {
+        "alpha": 0.0013826607653821422,
+        "gamma": 0.5693695477872597,
+        "pasquill_a": 0.11716693244920294,
+        "pasquill_b": 0.8984973899417098,
+        "pasquill_c": 0.09950839807360612,
+        "pasquill_d": 0.8145457048067474
+      },
+      "metrics": {
+        "composite_score": -175.4106,
+        "rmse": 118.079,
+        "mae": 114.663,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.53
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 2,
+      "score": -190.9494,
+      "params": {
+        "alpha": 0.0011754220284651614,
+        "gamma": 0.5247616100407942,
+        "pasquill_a": 0.11881426356560858,
+        "pasquill_b": 0.88261999729289,
+        "pasquill_c": 0.09905318672902176,
+        "pasquill_d": 0.7891812355375378
+      },
+      "metrics": {
+        "composite_score": -190.9494,
+        "rmse": 128.345,
+        "mae": 125.209,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.68
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 3,
+      "score": -157.6534,
+      "params": {
+        "alpha": 0.0014906199813771574,
+        "gamma": 0.6444910291325241,
+        "pasquill_a": 0.12091545877380086,
+        "pasquill_b": 0.8822260386097045,
+        "pasquill_c": 0.109153291105329,
+        "pasquill_d": 0.8065178654279753
+      },
+      "metrics": {
+        "composite_score": -157.6534,
+        "rmse": 106.371,
+        "mae": 102.566,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.47
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 4,
+      "score": -169.7487,
+      "params": {
+        "alpha": 0.0012032608702967126,
+        "gamma": 0.6680181057081579,
+        "pasquill_a": 0.10899529626485985,
+        "pasquill_b": 0.9119612302151598,
+        "pasquill_c": 0.0986951651951222,
+        "pasquill_d": 0.8154455164118125
+      },
+      "metrics": {
+        "composite_score": -169.7487,
+        "rmse": 114.343,
+        "mae": 110.812,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.65
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 5,
+      "score": -150.96,
+      "params": {
+        "alpha": 0.001567059660189116,
+        "gamma": 0.6583182680335076,
+        "pasquill_a": 0.12177186524387111,
+        "pasquill_b": 0.8670874193056461,
+        "pasquill_c": 0.10431336117127453,
+        "pasquill_d": 0.8170451767955638
+      },
+      "metrics": {
+        "composite_score": -150.96,
+        "rmse": 101.965,
+        "mae": 97.989,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.52
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 6,
+      "score": -129.8648,
+      "params": {
+        "alpha": 0.0018588056210897435,
+        "gamma": 0.678326340302422,
+        "pasquill_a": 0.11335185332794113,
+        "pasquill_b": 0.8970654075346726,
+        "pasquill_c": 0.10684731260069313,
+        "pasquill_d": 0.8331820860709486
+      },
+      "metrics": {
+        "composite_score": -129.8648,
+        "rmse": 88.121,
+        "mae": 83.488,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.46
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 7,
+      "score": -105.2422,
+      "params": {
+        "alpha": 0.002130140139373094,
+        "gamma": 0.7102519872562905,
+        "pasquill_a": 0.11897331138313333,
+        "pasquill_b": 0.9056414772605279,
+        "pasquill_c": 0.09856802257048174,
+        "pasquill_d": 0.843352029865073
+      },
+      "metrics": {
+        "composite_score": -105.2422,
+        "rmse": 72.076,
+        "mae": 66.332,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.63
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 8,
+      "score": -119.5226,
+      "params": {
+        "alpha": 0.0022076052629653995,
+        "gamma": 0.6336544907987101,
+        "pasquill_a": 0.11169431024156837,
+        "pasquill_b": 0.8748099308776891,
+        "pasquill_c": 0.10488857927552701,
+        "pasquill_d": 0.8017346953388071
+      },
+      "metrics": {
+        "composite_score": -119.5226,
+        "rmse": 81.362,
+        "mae": 76.321,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.63
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 9,
+      "score": -109.566,
+      "params": {
+        "alpha": 0.002151442026086295,
+        "gamma": 0.6872647239163189,
+        "pasquill_a": 0.11631454451065891,
+        "pasquill_b": 0.8920684165703815,
+        "pasquill_c": 0.10800450736519986,
+        "pasquill_d": 0.843235340878445
+      },
+      "metrics": {
+        "composite_score": -109.566,
+        "rmse": 74.881,
+        "mae": 69.37,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.62
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 10,
+      "score": -143.3388,
+      "params": {
+        "alpha": 0.0017078370369779058,
+        "gamma": 0.6561455585186513,
+        "pasquill_a": 0.11730746158297303,
+        "pasquill_b": 0.897661015556659,
+        "pasquill_c": 0.10631653236679972,
+        "pasquill_d": 0.8355989967767078
+      },
+      "metrics": {
+        "composite_score": -143.3388,
+        "rmse": 96.956,
+        "mae": 92.766,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.55
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 11,
+      "score": -90.8024,
+      "params": {
+        "alpha": 0.0020944753391674694,
+        "gamma": 0.7784986048140917,
+        "pasquill_a": 0.11820118716871818,
+        "pasquill_b": 0.9480537483171376,
+        "pasquill_c": 0.09816784567779059,
+        "pasquill_d": 0.8344111536128054
+      },
+      "metrics": {
+        "composite_score": -90.8024,
+        "rmse": 62.765,
+        "mae": 56.075,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.69
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 12,
+      "score": -68.8297,
+      "params": {
+        "alpha": 0.002155465722295423,
+        "gamma": 0.8474491934869637,
+        "pasquill_a": 0.12114875158613463,
+        "pasquill_b": 0.9094131041249823,
+        "pasquill_c": 0.08916525125968097,
+        "pasquill_d": 0.8569109532178001
+      },
+      "metrics": {
+        "composite_score": -68.8297,
+        "rmse": 48.871,
+        "mae": 39.917,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.59
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 13,
+      "score": -65.7729,
+      "params": {
+        "alpha": 0.0023266363248127093,
+        "gamma": 0.8083690127956676,
+        "pasquill_a": 0.12195927075090465,
+        "pasquill_b": 0.9294285247887237,
+        "pasquill_c": 0.08514692246338729,
+        "pasquill_d": 0.8970869583563723
+      },
+      "metrics": {
+        "composite_score": -65.7729,
+        "rmse": 46.945,
+        "mae": 37.655,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.54
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 14,
+      "score": -51.2903,
+      "params": {
+        "alpha": 0.0026313910066027555,
+        "gamma": 0.7919900515990286,
+        "pasquill_a": 0.1291978070815365,
+        "pasquill_b": 0.8859550413784307,
+        "pasquill_c": 0.08883884455028561,
+        "pasquill_d": 0.8605947504213902
+      },
+      "metrics": {
+        "composite_score": -51.2903,
+        "rmse": 36.583,
+        "mae": 29.414,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.6
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 15,
+      "score": -43.4904,
+      "params": {
+        "alpha": 0.002874757268775333,
+        "gamma": 0.8637356883140956,
+        "pasquill_a": 0.13543164784399672,
+        "pasquill_b": 0.8442866163769497,
+        "pasquill_c": 0.0808206399227826,
+        "pasquill_d": 0.8325175422587899
+      },
+      "metrics": {
+        "composite_score": -43.4904,
+        "rmse": 30.213,
+        "mae": 26.555,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.73
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 16,
+      "score": 42.3294,
+      "params": {
+        "alpha": 0.003251311894681241,
+        "gamma": 0.8373441666756193,
+        "pasquill_a": 0.1444438492559375,
+        "pasquill_b": 0.8626357333207069,
+        "pasquill_c": 0.0832147423433663,
+        "pasquill_d": 0.8494520507403069
+      },
+      "metrics": {
+        "composite_score": 42.3294,
+        "rmse": 40.979,
+        "mae": 33.384,
+        "peak_recall": 1.0,
+        "p95_latency_ms": 0.47
+      },
+      "improved": true
+    },
+    {
+      "trial_id": 17,
+      "score": 41.5666,
+      "params": {
+        "alpha": 0.0034122986277682157,
+        "gamma": 0.8054138790869575,
+        "pasquill_a": 0.14787998262642854,
+        "pasquill_b": 0.8436358516317801,
+        "pasquill_c": 0.07660684635652124,
+        "pasquill_d": 0.8238344756505919
+      },
+      "metrics": {
+        "composite_score": 41.5666,
+        "rmse": 41.535,
+        "mae": 33.796,
+        "peak_recall": 1.0,
+        "p95_latency_ms": 0.5
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 18,
+      "score": -41.3722,
+      "params": {
+        "alpha": 0.0030755274020800873,
+        "gamma": 0.75992510834781,
+        "pasquill_a": 0.13151489670343086,
+        "pasquill_b": 0.8791473866485736,
+        "pasquill_c": 0.08271033726538761,
+        "pasquill_d": 0.8441967424899072
+      },
+      "metrics": {
+        "composite_score": -41.3722,
+        "rmse": 28.68,
+        "mae": 25.385,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.83
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 19,
+      "score": 39.8815,
+      "params": {
+        "alpha": 0.003070895212169402,
+        "gamma": 0.8870418627239562,
+        "pasquill_a": 0.13628662032713504,
+        "pasquill_b": 0.8688327701715756,
+        "pasquill_c": 0.07795530219018648,
+        "pasquill_d": 0.8914505641002493
+      },
+      "metrics": {
+        "composite_score": 39.8815,
+        "rmse": 42.755,
+        "mae": 34.726,
+        "peak_recall": 1.0,
+        "p95_latency_ms": 0.46
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 20,
+      "score": -58.0299,
+      "params": {
+        "alpha": 0.002650619160833447,
+        "gamma": 0.7562706266639058,
+        "pasquill_a": 0.1325379308541737,
+        "pasquill_b": 0.8299807603287574,
+        "pasquill_c": 0.08402330168275968,
+        "pasquill_d": 0.8355487607463183
+      },
+      "metrics": {
+        "composite_score": -58.0299,
+        "rmse": 41.594,
+        "mae": 32.871,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.53
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 21,
+      "score": -49.0686,
+      "params": {
+        "alpha": 0.0028702424340739255,
+        "gamma": 0.8970954659084074,
+        "pasquill_a": 0.1370889445938467,
+        "pasquill_b": 0.8699063706866353,
+        "pasquill_c": 0.0885138540378205,
+        "pasquill_d": 0.812349721592972
+      },
+      "metrics": {
+        "composite_score": -49.0686,
+        "rmse": 34.523,
+        "mae": 29.09,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.54
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 22,
+      "score": -45.8329,
+      "params": {
+        "alpha": 0.003147735726625636,
+        "gamma": 0.8139934215156044,
+        "pasquill_a": 0.14768231112452976,
+        "pasquill_b": 0.8963010648952218,
+        "pasquill_c": 0.0906671349913096,
+        "pasquill_d": 0.8365850405381398
+      },
+      "metrics": {
+        "composite_score": -45.8329,
+        "rmse": 32.03,
+        "mae": 27.606,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.49
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 23,
+      "score": -40.9982,
+      "params": {
+        "alpha": 0.0027266359197801256,
+        "gamma": 0.8503140770483798,
+        "pasquill_a": 0.14589225518765417,
+        "pasquill_b": 0.8212049242536833,
+        "pasquill_c": 0.08431260632053664,
+        "pasquill_d": 0.8302209089249014
+      },
+      "metrics": {
+        "composite_score": -40.9982,
+        "rmse": 28.348,
+        "mae": 25.3,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.48
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 24,
+      "score": -41.0672,
+      "params": {
+        "alpha": 0.0030953977502471306,
+        "gamma": 0.7844254710008395,
+        "pasquill_a": 0.13065216756999254,
+        "pasquill_b": 0.8616986627044048,
+        "pasquill_c": 0.07700590968906564,
+        "pasquill_d": 0.8905975137556188
+      },
+      "metrics": {
+        "composite_score": -41.0672,
+        "rmse": 28.354,
+        "mae": 25.425,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.6
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 25,
+      "score": -47.572,
+      "params": {
+        "alpha": 0.00294231567527905,
+        "gamma": 0.871374879501942,
+        "pasquill_a": 0.15696511821770046,
+        "pasquill_b": 0.827458509866081,
+        "pasquill_c": 0.08236267436695727,
+        "pasquill_d": 0.8804879466951675
+      },
+      "metrics": {
+        "composite_score": -47.572,
+        "rmse": 33.377,
+        "mae": 28.391,
+        "peak_recall": 0.0,
+        "p95_latency_ms": 0.53
+      },
+      "improved": false
+    },
+    {
+      "trial_id": 26,
+      "score": 26.8772,
+      "params": {
+        "alpha": 0.0033186789420238056,
+        "gamma": 0.8626688011093359,
+        "pasquill_a": 0.1304880286010437,
+        "pasquill_b": 0.8580513323384736,
+        "pasquill_c": 0.08055467711402724,
+        "pasquill_d": 0.8152933877530391
+      },
+      "metrics": {
+        "composite_score": 26.8772,
+        "rmse": 51.547,
+        "mae": 43.152,
+        "peak_recall": 1.0,
+        "p95_latency_ms": 0.61
+      },
+      "improved": false
+    }
+  ]
+}

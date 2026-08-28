@@ -13,33 +13,74 @@ interface ForecastTimelineProps {
 export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimelineProps) {
   const [selectedHour, setSelectedHour] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [forecastStart, setForecastStart] = useState<Date | null>(null);
+  const [forecastStart] = useState<Date>(() => new Date());
   const valueRef = useRef<HTMLElement>(null);
   const categoryRef = useRef<HTMLSpanElement>(null);
   const previousAqiRef = useRef<number | null>(null);
 
+  const [forecastAqiSeries, setForecastAqiSeries] = useState<number[]>([]);
+
   useEffect(() => {
-    setForecastStart(new Date());
-  }, []);
+    async function loadForecast() {
+      try {
+        const res = await fetch("/api/forecast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            history_pm25: [
+              Math.max(30, baselineAqi * 0.7),
+              Math.max(30, baselineAqi * 0.72),
+              Math.max(30, baselineAqi * 0.75),
+              Math.max(30, baselineAqi * 0.78),
+              Math.max(30, baselineAqi * 0.8),
+            ],
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.aqi_p50) && data.aqi_p50.length > 0) {
+            setForecastAqiSeries(data.aqi_p50);
+          }
+        }
+      } catch {
+      }
+    }
+    loadForecast();
+  }, [baselineAqi]);
+
 
   const hourlyData = useMemo(() => Array.from({ length: 73 }, (_, hour) => {
     if (!forecastStart) return { hour, label: "", aqi: baselineAqi, multiplier: 1 };
-    if (hour === 0) return { hour, label: "Now", aqi: baselineAqi, multiplier: 1 };
 
     const forecastTime = new Date(forecastStart);
     forecastTime.setHours(forecastTime.getHours() + hour);
     const timeStr = forecastTime.toLocaleTimeString("en-IN", { hour: "numeric", hour12: true });
     const dayStr = forecastTime.toLocaleDateString("en-IN", { weekday: "short" });
-    const hourOfDay = forecastTime.getHours();
-    const diurnalFactor = 1 + 0.35 * Math.sin(((hourOfDay - 9) * Math.PI) / 12);
+    const label = hour === 0 ? "Now" : `${dayStr} · ${timeStr}`;
+
+    if (hour === 0) return { hour, label, aqi: baselineAqi, multiplier: 1 };
+
+    const modelAqi = forecastAqiSeries[hour];
+    let predictedAqi = baselineAqi;
+
+    if (modelAqi !== undefined) {
+      predictedAqi = modelAqi;
+    } else {
+      const hourOfDay = forecastTime.getHours();
+      const diurnalFactor = 1 + 0.35 * Math.sin(((hourOfDay - 9) * Math.PI) / 12);
+      predictedAqi = Math.round(baselineAqi * diurnalFactor);
+    }
+
+    const multiplier = baselineAqi > 0 ? predictedAqi / baselineAqi : 1.0;
 
     return {
       hour,
-      label: `${dayStr} · ${timeStr}`,
-      aqi: Math.min(Math.round(baselineAqi * diurnalFactor), 480),
-      multiplier: diurnalFactor,
+      label,
+      aqi: Math.min(Math.max(predictedAqi, 20), 500),
+      multiplier,
     };
-  }), [baselineAqi, forecastStart]);
+  }), [baselineAqi, forecastStart, forecastAqiSeries]);
+
 
   useEffect(() => {
     if (!isPlaying) return;

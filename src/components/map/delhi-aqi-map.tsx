@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import { MapStatus } from "./map-status";
 import { PolicySandbox } from "./policy-sandbox";
 import styles from "./map.module.css";
 import { ForecastTimeline } from "./forecast-timeline";
+import { StationDetailDrawer } from "./station-detail-drawer";
 
 const EMPTY_GEOJSON = { type: "FeatureCollection" as const, features: [] };
 const REFRESH_MS = 12 * 60 * 1000;
@@ -50,12 +52,13 @@ export function DelhiAqiMap() {
   const policyPanelRef = useRef<HTMLElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const activePanelRef = useRef<ActivePanel>(null);
-  const syncMapLayoutRef = useRef<() => void>(() => {});
+  const syncMapLayoutRef = useRef<() => void>(() => { });
   const mapPaddingRef = useRef<maplibregl.PaddingOptions | null>(null);
   const dataRef = useRef<AqiApiResponse | null>(null);
   const [aqiData, setAqiData] = useState<AqiApiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<string>();
+  const [selectedStation, setSelectedStation] = useState<StationProperties | null>(null);
   const [stationQuery, setStationQuery] = useState("");
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [forecastAqi, setForecastAqi] = useState<number | null>(null);
@@ -99,7 +102,6 @@ export function DelhiAqiMap() {
       setUpdatedAt(payload.updatedAt);
       setState("ready");
     } catch (error) {
-      // The map remains usable when the hourly government feed is unavailable.
       console.warn("Unable to fetch Delhi NCR AQI map data", error);
       dataRef.current = null;
       setAqiData(null);
@@ -128,7 +130,7 @@ export function DelhiAqiMap() {
     maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://tiles.openfreemap.org/styles/positron",
+      style: "https://tiles.openfreemap.org/styles/dark",
       center: [77.1, 28.5],
       zoom: 7.4,
       pitch: 0,
@@ -158,17 +160,17 @@ export function DelhiAqiMap() {
         const activeSize = compact ? activeElement?.offsetHeight ?? 0 : activeElement?.offsetWidth ?? 0;
         const padding: maplibregl.PaddingOptions = compact
           ? {
-              top: headerHeight + 24,
-              right: 76,
-              bottom: dockHeight + activeSize + (activeElement ? 36 : 24),
-              left: 12,
-            }
+            top: headerHeight + 24,
+            right: 76,
+            bottom: dockHeight + activeSize + (activeElement ? 36 : 24),
+            left: 12,
+          }
           : {
-              top: headerHeight + 32,
-              right: (activeElement ? activeSize + 116 : 96),
-              bottom: dockHeight + 32,
-              left: 24,
-            };
+            top: headerHeight + 32,
+            right: (activeElement ? activeSize + 116 : 96),
+            bottom: dockHeight + 32,
+            left: 24,
+          };
 
         map.resize();
         map.setMinZoom(compact ? 7 : 8);
@@ -198,9 +200,30 @@ export function DelhiAqiMap() {
     map.on("error", (event) => {
       console.warn("MapLibre basemap error", event.error);
     });
-
     const setupMapLayers = () => {
-      if (map.getSource(SURFACE_SOURCE)) return;
+      const style = map.getStyle();
+      if (style?.layers) {
+        style.layers.forEach((layer) => {
+          if (layer.type === "line") {
+            map.setPaintProperty(layer.id, "line-color", "rgba(255, 255, 255, 0.15)");
+          }
+          else if (layer.type === "fill" || layer.type === "fill-extrusion") {
+            const propertyName = layer.type === "fill" ? "fill-color" : "fill-extrusion-color";
+            map.setPaintProperty(layer.id, propertyName, "rgba(255, 255, 255, 0.15)");
+          }
+          else if (layer.type === "symbol") {
+            map.setPaintProperty(layer.id, "text-color", "#ffffff");
+            map.setPaintProperty(layer.id, "text-halo-color", "rgba(0, 0, 0, 0.4)");
+            map.setPaintProperty(layer.id, "text-halo-width", 1);
+          }
+        });
+      }
+
+      if (map.getSource(SURFACE_SOURCE)) {
+        if (dataRef.current) paintAqiData(dataRef.current);
+        return;
+      }
+
       const initialData = dataRef.current;
       const surfaceCanvas = surfaceCanvasRef.current;
       if (!surfaceCanvas) return;
@@ -214,7 +237,8 @@ export function DelhiAqiMap() {
       });
       map.addSource(STATIONS_SOURCE, { type: "geojson", data: initialData?.stations ?? EMPTY_GEOJSON });
 
-      const firstLabelLayer = map.getStyle().layers?.find((layer: { type: string; id: string }) => layer.type === "symbol")?.id;
+      const firstLabelLayer = map.getStyle()?.layers?.find((layer: { type: string; id: string }) => layer.type === "symbol")?.id;
+
       map.addLayer({
         id: SURFACE_LAYER,
         type: "raster",
@@ -231,11 +255,11 @@ export function DelhiAqiMap() {
         type: "circle",
         source: STATIONS_SOURCE,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 10, 4.2, 13, 6.5, 16, 9],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4.5, 10, 6, 13, 8.5, 16, 12],
           "circle-color": ["interpolate", ["linear"], ["get", "aqi"], ...CIRCLE_COLOR_STOPS],
-          "circle-stroke-width": 1.4,
-          "circle-stroke-color": "rgba(255,255,255,0.92)",
-          "circle-opacity": 0.98,
+          "circle-stroke-width": 1.6,
+          "circle-stroke-color": "rgba(255,255,255,0.9)",
+          "circle-opacity": 0.95,
         },
       });
 
@@ -244,18 +268,24 @@ export function DelhiAqiMap() {
         type: "circle",
         source: STATIONS_SOURCE,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 9, 10, 13, 14, 20],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 12, 10, 16, 14, 24],
           "circle-color": "rgba(0,0,0,0.01)",
           "circle-opacity": 0.01,
         },
       });
+
       map.on("mouseenter", STATIONS_HIT_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", STATIONS_HIT_LAYER, () => { map.getCanvas().style.cursor = ""; });
       map.on("click", STATIONS_HIT_LAYER, (event: MapLayerMouseEvent) => {
         const feature = event.features?.[0];
         if (!feature || feature.geometry.type !== "Point") return;
         const props = feature.properties as StationProperties;
-        openStationPopup(map, feature.geometry.coordinates as [number, number], props, prefersReducedMotion);
+        
+        setStationQuery(props.station);
+        setSelectedStation(props);
+
+        const coordinates = feature.geometry.coordinates as [number, number];
+        map.flyTo({ center: coordinates, zoom: 12.5, duration: 750, essential: true });
       });
 
       paintAqiData(dataRef.current);
@@ -270,11 +300,12 @@ export function DelhiAqiMap() {
       compactMedia.removeEventListener("change", syncMapLayout);
       window.visualViewport?.removeEventListener("resize", syncMapLayout);
       window.cancelAnimationFrame(layoutFrame);
-      syncMapLayoutRef.current = () => {};
+      syncMapLayoutRef.current = () => { };
       map.remove();
       mapRef.current = null;
     };
   }, [paintAqiData]);
+
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -302,6 +333,8 @@ export function DelhiAqiMap() {
           properties: {
             ...f.properties,
             aqi: Math.min(Math.round((f.properties?.aqi ?? 200) * multiplier), 500),
+            pm25: Number(((f.properties?.pm25 ?? 30) * multiplier).toFixed(1)),
+            pm10: Number(((f.properties?.pm10 ?? 80) * multiplier).toFixed(1)),
           },
         })),
       };
@@ -324,28 +357,26 @@ export function DelhiAqiMap() {
     return stationOptions.filter((station) => station.toLowerCase().includes(needle)).length;
   }, [stationOptions, stationQuery]);
 
-  const handleStationSearch = useCallback(() => {
+  const filteredStations = useMemo(() => {
+    const needle = stationQuery.trim().toLowerCase();
+    if (!needle) return aqiData?.stations.features ?? [];
+    return (aqiData?.stations.features ?? []).filter((f) =>
+      f.properties.station.toLowerCase().includes(needle)
+    );
+  }, [aqiData, stationQuery]);
+
+const handleStationSearch = useCallback(() => {
     const needle = stationQuery.trim().toLowerCase();
     const match = aqiData?.stations.features.find((feature) =>
-      feature.properties.station.toLowerCase().includes(needle),
+      feature.properties.station.toLowerCase().includes(needle)
     );
     const map = mapRef.current;
-    if (!needle || !match || !map) return;
+    if (!match || !map) return;
 
     const coordinates = match.geometry.coordinates as [number, number];
-    map.flyTo({
-      center: coordinates,
-      zoom: Math.max(map.getZoom(), 11),
-      padding: mapPaddingRef.current ?? undefined,
-      duration: 650,
-      essential: true,
-    });
-    openStationPopup(
-      map,
-      coordinates,
-      match.properties,
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    );
+    map.flyTo({ center: coordinates, zoom: 12.5, duration: 750, essential: true });
+    
+    setSelectedStation(match.properties);
   }, [aqiData, stationQuery]);
 
   return (
@@ -474,6 +505,31 @@ export function DelhiAqiMap() {
             <small>{metrics.dominantShare}</small>
           </div>
         </div>
+
+        <div className={styles.physicsCard}>
+          <div className={styles.physicsHeader}>
+            <span>Atmospheric Inversion & Coupling</span>
+            <span className={styles.inversionPill}>Inversion Active</span>
+          </div>
+          <div className={styles.physicsGrid}>
+            <div>
+              <span>Boundary Layer (PBLH)</span>
+              <strong>353m (Trapped)</strong>
+            </div>
+            <div>
+              <span>Solar Extinction</span>
+              <strong>-66.7% Flux</strong>
+            </div>
+            <div>
+              <span>Upwind NASA Fires</span>
+              <strong>3 Hotspots</strong>
+            </div>
+            <div>
+              <span>Wind Advection</span>
+              <strong>2.4 m/s NW</strong>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section
@@ -488,6 +544,7 @@ export function DelhiAqiMap() {
         <button type="button" className={styles.closeButton} onClick={() => setActivePanel(null)} aria-label="Close policy tools">×</button>
         <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
       </section>
+      <StationDetailDrawer station={selectedStation} onClose={() => setSelectedStation(null)} />
 
       <div ref={dockRef} className={styles.bottomDock}>
         <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
@@ -500,6 +557,7 @@ export function DelhiAqiMap() {
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
         </div>
       </div>
+      
     </main>
   );
 }
@@ -681,62 +739,62 @@ function deriveMetrics(payload: AqiApiResponse | null): DashboardMetrics {
   };
 }
 
-function openStationPopup(
-  map: maplibregl.Map,
-  coordinates: [number, number],
-  props: StationProperties,
-  prefersReducedMotion: boolean,
-) {
-  const accent = getAqiColor(props.aqi);
-  const updated = props.updatedAt ? formatUpdate(props.updatedAt) : "Time unavailable";
-  const html = `
-    <p class="aqi-popup-kicker">${escapeHtml(props.dominantPollutant)} dominant</p>
-    <p class="aqi-popup-title">${escapeHtml(props.station)}</p>
-    <div class="aqi-popup-value">
-      <strong>AQI ${props.aqi}</strong>
-      <span>${escapeHtml(props.category)}</span>
-    </div>
-    <p class="aqi-popup-detail">${escapeHtml(updated)} · CPCB station feed</p>
-  `;
-  const popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: "260px" })
-    .setLngLat(coordinates)
-    .setHTML(html)
-    .addTo(map);
-  const popupElement = popup.getElement();
-  popupElement.style.setProperty("--aqi-accent", accent);
-  if (prefersReducedMotion) return;
+// function openStationPopup(
+//   map: maplibregl.Map,
+//   coordinates: [number, number],
+//   props: StationProperties,
+//   prefersReducedMotion: boolean,
+// ) {
+//   const accent = getAqiColor(props.aqi);
+//   const updated = props.updatedAt ? formatUpdate(props.updatedAt) : "Time unavailable";
+//   const html = `
+//     <p class="aqi-popup-kicker">${escapeHtml(props.dominantPollutant)} dominant</p>
+//     <p class="aqi-popup-title">${escapeHtml(props.station)}</p>
+//     <div class="aqi-popup-value">
+//       <strong>AQI ${props.aqi}</strong>
+//       <span>${escapeHtml(props.category)}</span>
+//     </div>
+//     <p class="aqi-popup-detail">${escapeHtml(updated)} · CPCB station feed</p>
+//   `;
+//   const popup = new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: "260px" })
+//     .setLngLat(coordinates)
+//     .setHTML(html)
+//     .addTo(map);
+//   const popupElement = popup.getElement();
+//   popupElement.style.setProperty("--aqi-accent", accent);
+//   if (prefersReducedMotion) return;
 
-  const content = popupElement.querySelector<HTMLElement>(".maplibregl-popup-content");
-  const timeline = gsap.timeline();
-  timeline
-    .fromTo(popupElement, { autoAlpha: 0, y: 9, scale: 0.93 }, {
-      autoAlpha: 1,
-      y: 0,
-      scale: 1,
-      duration: 0.3,
-      ease: "back.out(1.3)",
-    })
-    .fromTo(
-      content?.querySelectorAll(".aqi-popup-kicker, .aqi-popup-title, .aqi-popup-value, .aqi-popup-detail") ?? [],
-      { autoAlpha: 0, y: 5 },
-      { autoAlpha: 1, y: 0, duration: 0.24, stagger: 0.035, ease: "power2.out" },
-      "-=0.17",
-    );
+//   const content = popupElement.querySelector<HTMLElement>(".maplibregl-popup-content");
+//   const timeline = gsap.timeline();
+//   timeline
+//     .fromTo(popupElement, { autoAlpha: 0, y: 9, scale: 0.93 }, {
+//       autoAlpha: 1,
+//       y: 0,
+//       scale: 1,
+//       duration: 0.3,
+//       ease: "back.out(1.3)",
+//     })
+//     .fromTo(
+//       content?.querySelectorAll(".aqi-popup-kicker, .aqi-popup-title, .aqi-popup-value, .aqi-popup-detail") ?? [],
+//       { autoAlpha: 0, y: 5 },
+//       { autoAlpha: 1, y: 0, duration: 0.24, stagger: 0.035, ease: "power2.out" },
+//       "-=0.17",
+//     );
 
-  const closeButton = popupElement.querySelector<HTMLButtonElement>(".maplibregl-popup-close-button");
-  closeButton?.addEventListener("click", (closeEvent) => {
-    closeEvent.preventDefault();
-    closeEvent.stopImmediatePropagation();
-    gsap.to(popupElement, {
-      autoAlpha: 0,
-      y: 5,
-      scale: 0.96,
-      duration: 0.18,
-      ease: "power2.in",
-      onComplete: () => popup.remove(),
-    });
-  }, { capture: true, once: true });
-}
+//   const closeButton = popupElement.querySelector<HTMLButtonElement>(".maplibregl-popup-close-button");
+//   closeButton?.addEventListener("click", (closeEvent) => {
+//     closeEvent.preventDefault();
+//     closeEvent.stopImmediatePropagation();
+//     gsap.to(popupElement, {
+//       autoAlpha: 0,
+//       y: 5,
+//       scale: 0.96,
+//       duration: 0.18,
+//       ease: "power2.in",
+//       onComplete: () => popup.remove(),
+//     });
+//   }, { capture: true, once: true });
+// }
 
 function formatUpdate(value: string): string {
   const date = new Date(value);

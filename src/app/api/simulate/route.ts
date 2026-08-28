@@ -1,38 +1,42 @@
 import { NextResponse } from "next/server";
-
-const atmosphericEngineUrl =
-  process.env.ATMOSPHERIC_ENGINE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
+import { simulatePolicyImpact } from "@/lib/aqi/policy";
 
 export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({}));
+  
+  const backendUrl = process.env.BACKEND_API_URL || "https://vayux.onrender.com";
+
   try {
-    const body = await request.json();
+    const response = await fetch(`${backendUrl}/api/v1/policy/simulate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_aqi: body.baseline_aqi ?? 340,
+        baseline_pm25: body.baseline_pm25 ?? 260.0,
+        vehicular: body.vehicular ?? 1.0,
+        stubble: body.stubble ?? 1.0,
+        industrial: body.industrial ?? 1.0,
+        dust: body.dust ?? 1.0,
+      }),
+      signal: AbortSignal.timeout(3000),
+    });
 
-    const response = await fetch(
-      `${atmosphericEngineUrl}/api/v1/policy/simulate`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      },
-    );
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `Backend returned ${response.status}` },
-        { status: response.status }
-      );
+    if (response.ok) {
+      const data = await response.json();
+      return NextResponse.json(data);
     }
-
-    const data = await response.json();
-    return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy error calling atmospheric engine:", error);
-    return NextResponse.json(
-      { error: "Failed to connect to atmospheric physics engine" },
-      { status: 500 }
-    );
+    console.error("Failed to reach Render API, falling back to local simulation", error);
   }
+
+  const result = simulatePolicyImpact({
+    baseline_aqi: body.baseline_aqi ?? 340,
+    baseline_pm25: body.baseline_pm25 ?? 260.0,
+    vehicular: body.vehicular ?? 1.0,
+    stubble: body.stubble ?? 1.0,
+    industrial: body.industrial ?? 1.0,
+    dust: body.dust ?? 1.0,
+  });
+
+  return NextResponse.json(result);
 }

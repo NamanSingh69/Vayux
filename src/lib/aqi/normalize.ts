@@ -54,6 +54,11 @@ interface StationDraft {
   updatedAt: string;
   pollutants: Partial<Record<PollutantKey, number>>;
   pollutantUpdatedAt: Partial<Record<PollutantKey, string>>;
+  temperature?: number;
+  humidity?: number;
+  windSpeed?: number;
+  windDeg?: number;
+  pressure?: number;
 }
 
 function isNewer(candidate: string, current: string): boolean {
@@ -88,6 +93,12 @@ export function normalizeCpcbRecords(records: DataGovRecord[]): StationReading[]
     const key = station.toLocaleLowerCase();
     const current = stations.get(key);
 
+    const temperature = numberFor(valueFor(record, "temperature", "temp")) ?? undefined;
+    const humidity = numberFor(valueFor(record, "humidity")) ?? undefined;
+    const windSpeed = numberFor(valueFor(record, "wind_speed", "windSpeed")) ?? undefined;
+    const windDeg = numberFor(valueFor(record, "wind_deg", "windDeg")) ?? undefined;
+    const pressure = numberFor(valueFor(record, "pressure")) ?? undefined;
+
     if (!current) {
       stations.set(key, {
         station,
@@ -96,18 +107,25 @@ export function normalizeCpcbRecords(records: DataGovRecord[]): StationReading[]
         updatedAt,
         pollutants: { [pollutant]: average },
         pollutantUpdatedAt: { [pollutant]: updatedAt },
+        temperature,
+        humidity,
+        windSpeed,
+        windDeg,
+        pressure,
       });
       continue;
     }
 
-    // A station has rows from several pollutants, each with its own feed timestamp.
-    // Only supersede a duplicate for the same pollutant; never discard PM10 because
-    // a newer PM2.5 row happened to be seen first.
     if (isNewer(updatedAt, current.pollutantUpdatedAt[pollutant] ?? "")) {
       current.pollutants[pollutant] = average;
       current.pollutantUpdatedAt[pollutant] = updatedAt;
     }
     if (updatedAt && isNewer(updatedAt, current.updatedAt)) current.updatedAt = updatedAt;
+    if (temperature !== undefined) current.temperature = temperature;
+    if (humidity !== undefined) current.humidity = humidity;
+    if (windSpeed !== undefined) current.windSpeed = windSpeed;
+    if (windDeg !== undefined) current.windDeg = windDeg;
+    if (pressure !== undefined) current.pressure = pressure;
   }
 
   return [...stations.values()].flatMap(({ pollutantUpdatedAt: _timestamps, ...station }) => {

@@ -1747,3 +1747,396 @@
     animation: none;
   }
 }
+
+.stationDrawer {
+  position: absolute;
+  top: max(80px, calc(env(safe-area-inset-top) + 80px));
+  bottom: max(84px, calc(env(safe-area-inset-bottom) + 84px));
+  left: max(20px, env(safe-area-inset-left));
+  z-index: 40; 
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  width: min(340px, calc(100vw - 40px));
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7);
+  animation: slideInDrawer 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #f8fafc;
+}
+
+.sandboxTriggerPill {
+  position: absolute;
+  z-index: 5;
+  bottom: max(78px, calc(env(safe-area-inset-bottom) + 78px));
+  left: max(20px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sandboxTriggerPill:hover {
+  transform: translateY(-2px);
+  background: rgba(30, 41, 59, 0.98);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.sandboxIcon {
+  color: #fbbf24;
+  font-size: 14px;
+}
+
+@keyframes slideInDrawer {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.stationDrawerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stationDrawerEyebrow {
+  color: #38bdf8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.stationDrawerTitle {
+  margin: 2px 0 0;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.stationDrawerClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.stationDrawerClose:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.stationDrawerAqiCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stationDrawerAqiHero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stationDrawerAqiVal {
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1;
+  font-feature-settings: "tnum";
+}
+
+.stationDrawerAqiMeta {
+  display: grid;
+  gap: 4px;
+}
+
+.stationDrawerCategoryPill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  width: fit-content;
+}
+
+.stationDrawerDominant {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.stationDrawerDominant strong {
+  color: #e2e8f0;
+}
+
+.stationDrawerHealthText {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.stationDrawerSection {
+  display: grid;
+  gap: 8px;
+}
+
+.stationDrawerSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stationDrawerSectionHeader small {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.pollutantGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pollutantCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pollutantTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.pollutantName {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pollutantVal {
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pollutantBarTrack {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.pollutantBarFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.sparklineCard {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sparklineSvg {
+  width: 100%;
+  height: 65px;
+  overflow: visible;
+}
+
+.sparklineLabels {
+  display: flex;
+  justify-content: space-between;
+  color: #64748b;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+/* Weather Strip */
+.weatherStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weatherItem {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.weatherItem span {
+  color: #64748b;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.weatherItem strong {
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Chart Tab Header */
+.chartTabHeader {
+  display: flex;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.chartTabBtn {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chartTabActive {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+/* Layer Selector Dropdown (Inspired by aqi.in) */
+.layerSelectorWrap {
+  position: relative;
+  width: 100%;
+}
+
+.layerSelectorBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.layerSelectorBtn strong {
+  color: #38bdf8;
+}
+
+.layerSelectorBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.layerMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+}
+
+.layerMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.layerMenuItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.layerMenuActive {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.layerActivePip {
+  width: 4px;
+  height: 12px;
+  border-radius: 999px;
+  background: #38bdf8;
+}
+
