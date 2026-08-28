@@ -1,42 +1,56 @@
 import { NextResponse } from "next/server";
-import { simulatePolicyImpact } from "@/lib/aqi/policy";
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  
-  const backendUrl = process.env.BACKEND_API_URL || "https://vayux.onrender.com";
-
   try {
-    const response = await fetch(`${backendUrl}/api/v1/policy/simulate`, {
+    const body = await request.json().catch(() => ({}));
+
+    const backendUrl = process.env.BACKEND_API_URL || "https://vayux.onrender.com";
+    const endpoint = backendUrl.endsWith("/") ? backendUrl.slice(0, -1) : backendUrl;
+
+    const v_scale = body.vehicular_scale ?? body.vehicular_multiplier ?? body.vehicular ?? 1.0;
+    const s_scale = body.stubble_scale ?? body.stubble_multiplier ?? body.stubble ?? 1.0;
+    const base_aqi = body.baseline_aqi ?? 340;
+    const base_pm25 = body.baseline_pm25 ?? (base_aqi * 0.7);
+    const ind_scale = body.industrial_scale ?? body.industrial ?? 1.0;
+    const dust_scale = body.dust_scale ?? body.dust ?? 1.0;
+
+    // THE FIX: We build a URL Query String because FastAPI expects them in the URL!
+    const queryParams = new URLSearchParams({
+      baseline_aqi: base_aqi.toString(),
+      baseline_pm25: base_pm25.toString(),
+      vehicular_scale: v_scale.toString(),
+      stubble_scale: s_scale.toString(),
+      industrial_scale: ind_scale.toString(),
+      dust_scale: dust_scale.toString(),
+    }).toString();
+
+    // We send BOTH the query string (for FastAPI) and the body just to be safe
+    let response = await fetch(`${endpoint}/api/v1/policy/simulate?${queryParams}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        baseline_aqi: body.baseline_aqi ?? 340,
-        baseline_pm25: body.baseline_pm25 ?? 260.0,
-        vehicular: body.vehicular ?? 1.0,
-        stubble: body.stubble ?? 1.0,
-        industrial: body.industrial ?? 1.0,
-        dust: body.dust ?? 1.0,
-      }),
-      signal: AbortSignal.timeout(3000),
+      body: JSON.stringify(body),
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      return NextResponse.json(data);
+    if (response.status === 404) {
+      response = await fetch(`${endpoint}/simulate?${queryParams}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
     }
+
+    if (!response.ok) {
+      throw new Error(`Python backend failed with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+
   } catch (error) {
-    console.error("Failed to reach Render API, falling back to local simulation", error);
+    console.error("Simulation Proxy Error:", error);
+    return NextResponse.json(
+      { error: "Simulation engine failed to compute." },
+      { status: 500 }
+    );
   }
-
-  const result = simulatePolicyImpact({
-    baseline_aqi: body.baseline_aqi ?? 340,
-    baseline_pm25: body.baseline_pm25 ?? 260.0,
-    vehicular: body.vehicular ?? 1.0,
-    stubble: body.stubble ?? 1.0,
-    industrial: body.industrial ?? 1.0,
-    dust: body.dust ?? 1.0,
-  });
-
-  return NextResponse.json(result);
 }
