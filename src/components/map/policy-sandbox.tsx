@@ -60,17 +60,17 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
 
   return (
     <aside className={styles.sandbox} aria-label="Policy mitigation sandbox">
-      <div className={styles.panelHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span className={styles.panelIcon}>⚡</span>
+      <div className={styles.sandboxHeader}>
+        <div className={styles.sandboxTitleGroup}>
+          <span className={styles.sandboxHeaderIcon}>⚡</span>
           <div>
-            <h2>GRAP Policy Sandbox</h2>
-            <p>Simulate source-control reductions.</p>
+            <h3 className={styles.sandboxTitle}>GRAP Policy Simulator</h3>
+            <p className={styles.sandboxSubtitle}>Source-control & Inversion response</p>
           </div>
         </div>
         <button
           type="button"
-          className={styles.stationDrawerClose}
+          className={styles.sandboxCloseBtn}
           onClick={() => setIsOpen(false)}
           aria-label="Close Policy Sandbox"
         >
