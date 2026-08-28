@@ -21,7 +21,10 @@ const SURFACE_LAYER = "aqi-surface-bands";
 const STATIONS_LAYER = "aqi-stations-circle";
 const STATIONS_HIT_LAYER = "aqi-stations-hit";
 const NCR_BOUNDS: maplibregl.LngLatBoundsLike = [[75.8, 27], [78.4, 30]];
-const INITIAL_VIEW_BOUNDS: maplibregl.LngLatBoundsLike = [[76.55, 27.95], [77.85, 29.08]];
+const INITIAL_VIEW_BOUNDS: maplibregl.LngLatBoundsLike = [[76.72, 28.12], [77.66, 28.92]];
+// Desktop opens at a fixed Delhi NCR framing; tweak the zoom to open the default in/out.
+const DESKTOP_INITIAL_CENTER: [number, number] = [77.2, 28.55];
+const DESKTOP_INITIAL_ZOOM = 11;
 const COMPACT_LAYOUT_QUERY = "(max-width: 820px), (max-height: 560px)";
 const SURFACE_CANVAS_WIDTH = 512;
 const SURFACE_CANVAS_HEIGHT = 688;
@@ -48,6 +51,7 @@ export function DelhiAqiMap() {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const activePanelRef = useRef<ActivePanel>(null);
   const syncMapLayoutRef = useRef<() => void>(() => {});
+  const mapPaddingRef = useRef<maplibregl.PaddingOptions | null>(null);
   const dataRef = useRef<AqiApiResponse | null>(null);
   const [aqiData, setAqiData] = useState<AqiApiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -120,7 +124,6 @@ export function DelhiAqiMap() {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const motionCleanups: Array<() => void> = [];
 
     maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
     const map = new maplibregl.Map({
@@ -137,7 +140,6 @@ export function DelhiAqiMap() {
       attributionControl: false,
     });
     mapRef.current = map;
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "top-right");
 
     let layoutFrame = 0;
     let hasFitInitialBounds = false;
@@ -170,9 +172,17 @@ export function DelhiAqiMap() {
 
         map.resize();
         map.setMinZoom(compact ? 7 : 8);
-        map.setPadding(padding);
+        // Remember the panel-aware padding for camera moves (station fly-to) without
+        // applying it live — calling setPadding here would pan the map when a panel opens.
+        mapPaddingRef.current = padding;
         if (!hasFitInitialBounds && map.loaded()) {
-          map.fitBounds(INITIAL_VIEW_BOUNDS, { padding, maxZoom: compact ? 8.7 : 9.15, duration: 0 });
+          if (compact) {
+            map.fitBounds(INITIAL_VIEW_BOUNDS, { padding, maxZoom: 9.2, duration: 0 });
+          } else {
+            // jumpTo (not fitBounds + setZoom) so the fixed zoom is authoritative and not
+            // overridden by an in-flight ease.
+            map.jumpTo({ center: DESKTOP_INITIAL_CENTER, zoom: DESKTOP_INITIAL_ZOOM, padding });
+          }
           hasFitInitialBounds = true;
         }
       });
@@ -185,32 +195,6 @@ export function DelhiAqiMap() {
     compactMedia.addEventListener("change", syncMapLayout);
     window.visualViewport?.addEventListener("resize", syncMapLayout);
 
-    const controlGroup = containerRef.current.querySelector<HTMLElement>(".maplibregl-ctrl-group");
-    if (controlGroup && !prefersReducedMotion) {
-      gsap.fromTo(controlGroup, { autoAlpha: 0, x: 10 }, {
-        autoAlpha: 1,
-        x: 0,
-        duration: 0.5,
-        delay: 0.08,
-        ease: "power3.out",
-      });
-      controlGroup.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
-        const enter = () => gsap.to(button, { scale: 1.07, duration: 0.18, ease: "power2.out" });
-        const leave = () => gsap.to(button, { scale: 1, duration: 0.25, ease: "power3.out" });
-        const down = () => gsap.to(button, { scale: 0.92, duration: 0.1, ease: "power2.out" });
-        const up = () => gsap.to(button, { scale: 1.07, duration: 0.16, ease: "power2.out" });
-        button.addEventListener("pointerenter", enter);
-        button.addEventListener("pointerleave", leave);
-        button.addEventListener("pointerdown", down);
-        button.addEventListener("pointerup", up);
-        motionCleanups.push(() => {
-          button.removeEventListener("pointerenter", enter);
-          button.removeEventListener("pointerleave", leave);
-          button.removeEventListener("pointerdown", down);
-          button.removeEventListener("pointerup", up);
-        });
-      });
-    }
     map.on("error", (event) => {
       console.warn("MapLibre basemap error", event.error);
     });
@@ -282,9 +266,6 @@ export function DelhiAqiMap() {
     if (map.isStyleLoaded()) setupMapLayers();
 
     return () => {
-      motionCleanups.forEach((cleanup) => cleanup());
-      const controls = containerRef.current?.querySelectorAll(".maplibregl-ctrl-group, .maplibregl-ctrl-group button");
-      if (controls) gsap.killTweensOf(controls);
       resizeObserver.disconnect();
       compactMedia.removeEventListener("change", syncMapLayout);
       window.visualViewport?.removeEventListener("resize", syncMapLayout);
@@ -352,7 +333,13 @@ export function DelhiAqiMap() {
     if (!needle || !match || !map) return;
 
     const coordinates = match.geometry.coordinates as [number, number];
-    map.flyTo({ center: coordinates, zoom: Math.max(map.getZoom(), 11), duration: 650, essential: true });
+    map.flyTo({
+      center: coordinates,
+      zoom: Math.max(map.getZoom(), 11),
+      padding: mapPaddingRef.current ?? undefined,
+      duration: 650,
+      essential: true,
+    });
     openStationPopup(
       map,
       coordinates,
@@ -376,7 +363,12 @@ export function DelhiAqiMap() {
       <header ref={headerRef} className={styles.topBar}>
         <MapStatus state={state} updatedAt={updatedAt} metrics={metrics} />
         <form className={styles.searchShell} onSubmit={(event) => { event.preventDefault(); handleStationSearch(); }}>
-          <span className={styles.searchIcon} aria-hidden="true">⌕</span>
+          <span className={styles.searchIcon} aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" />
+              <line x1="20" y1="20" x2="16.5" y2="16.5" />
+            </svg>
+          </span>
           <input
             type="search"
             placeholder="Search CPCB station..."
