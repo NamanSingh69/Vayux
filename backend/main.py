@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
@@ -59,13 +59,107 @@ async def get_plume_dispersion(wind_speed: float = 3.5, wind_deg: float = 315.0)
     features = compute_plume_dispersion(live_fires, w_speed, w_deg)
     return {"type": "FeatureCollection", "features": features}
 
+class PolicySimulationRequest(BaseModel):
+    baseline_aqi: int = Field(default=340)
+    baseline_pm25: Optional[float] = Field(default=None)
+    vehicular: Optional[float] = Field(default=None)
+    vehicular_scale: Optional[float] = Field(default=None)
+    vehicular_multiplier: Optional[float] = Field(default=None)
+    stubble: Optional[float] = Field(default=None)
+    stubble_scale: Optional[float] = Field(default=None)
+    stubble_multiplier: Optional[float] = Field(default=None)
+    industrial: Optional[float] = Field(default=None)
+    industrial_scale: Optional[float] = Field(default=None)
+    dust: Optional[float] = Field(default=None)
+    dust_scale: Optional[float] = Field(default=None)
+
 @app.post("/api/v1/policy/simulate")
-def run_policy_simulation(baseline_aqi: int = 340, baseline_pm25: float = 260.0, vehicular: float = 1.0, stubble: float = 1.0, industrial: float = 1.0, dust: float = 1.0):
+@app.post("/simulate")
+def run_policy_simulation(
+    payload: PolicySimulationRequest = Body(default=None),
+    baseline_aqi: Optional[int] = None,
+    baseline_pm25: Optional[float] = None,
+    vehicular: Optional[float] = None,
+    vehicular_scale: Optional[float] = None,
+    stubble: Optional[float] = None,
+    stubble_scale: Optional[float] = None,
+    industrial: Optional[float] = None,
+    industrial_scale: Optional[float] = None,
+    dust: Optional[float] = None,
+    dust_scale: Optional[float] = None,
+):
+    # Resolve values with fallbacks
+    r_aqi = 340
+    r_pm25 = None
+    r_vehicular = 1.0
+    r_stubble = 1.0
+    r_industrial = 1.0
+    r_dust = 1.0
+
+    # 1. Read from payload if it exists
+    if payload is not None:
+        r_aqi = payload.baseline_aqi
+        r_pm25 = payload.baseline_pm25
+
+        # Vehicular
+        for v in [payload.vehicular_scale, payload.vehicular_multiplier, payload.vehicular]:
+            if v is not None:
+                r_vehicular = v
+                break
+
+        # Stubble
+        for s in [payload.stubble_scale, payload.stubble_multiplier, payload.stubble]:
+            if s is not None:
+                r_stubble = s
+                break
+
+        # Industrial
+        for i in [payload.industrial_scale, payload.industrial]:
+            if i is not None:
+                r_industrial = i
+                break
+
+        # Dust
+        for d in [payload.dust_scale, payload.dust]:
+            if d is not None:
+                r_dust = d
+                break
+
+    # 2. Query parameters override payload
+    if baseline_aqi is not None:
+        r_aqi = baseline_aqi
+    if baseline_pm25 is not None:
+        r_pm25 = baseline_pm25
+
+    if vehicular_scale is not None:
+        r_vehicular = vehicular_scale
+    elif vehicular is not None:
+        r_vehicular = vehicular
+
+    if stubble_scale is not None:
+        r_stubble = stubble_scale
+    elif stubble is not None:
+        r_stubble = stubble
+
+    if industrial_scale is not None:
+        r_industrial = industrial_scale
+    elif industrial is not None:
+        r_industrial = industrial
+
+    if dust_scale is not None:
+        r_dust = dust_scale
+    elif dust is not None:
+        r_dust = dust
+
+    # 3. Final default for baseline_pm25 if it's still None
+    if r_pm25 is None:
+        r_pm25 = r_aqi * 0.7647 if r_aqi != 340 else 260.0
+
     return simulate_policy_impact(
-        baseline_aqi=baseline_aqi,
-        baseline_pm25=baseline_pm25,
-        vehicular_scale=vehicular,
-        stubble_scale=stubble,
-        industrial_scale=industrial,
-        dust_scale=dust
+        baseline_aqi=r_aqi,
+        baseline_pm25=r_pm25,
+        vehicular_scale=r_vehicular,
+        stubble_scale=r_stubble,
+        industrial_scale=r_industrial,
+        dust_scale=r_dust
     )
