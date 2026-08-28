@@ -12,6 +12,36 @@ interface ForecastTimelineProps {
 export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimelineProps) {
   const [selectedHour, setSelectedHour] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [forecastAqiSeries, setForecastAqiSeries] = useState<number[]>([]);
+
+  useEffect(() => {
+    async function loadForecast() {
+      try {
+        const res = await fetch("/api/forecast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            history_pm25: [
+              Math.max(30, baselineAqi * 0.7),
+              Math.max(30, baselineAqi * 0.72),
+              Math.max(30, baselineAqi * 0.75),
+              Math.max(30, baselineAqi * 0.78),
+              Math.max(30, baselineAqi * 0.8),
+            ],
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.aqi_p50) && data.aqi_p50.length > 0) {
+            setForecastAqiSeries(data.aqi_p50);
+          }
+        }
+      } catch {
+        // Fallback handled in useMemo
+      }
+    }
+    loadForecast();
+  }, [baselineAqi]);
 
   const hourlyData = useMemo(() => {
     return Array.from({ length: 73 }, (_, hour) => {
@@ -20,18 +50,27 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
       const timeStr = now.toLocaleTimeString("en-IN", { hour: "numeric", hour12: true });
       const dayStr = now.toLocaleDateString("en-IN", { weekday: "short" });
 
-      const hourOfDay = now.getHours();
-      const diurnalFactor = 1.0 + 0.35 * Math.sin(((hourOfDay - 9) * Math.PI) / 12);
-      const syntheticAqi = Math.round(baselineAqi * diurnalFactor);
+      const modelAqi = forecastAqiSeries[hour];
+      let predictedAqi = baselineAqi;
+
+      if (modelAqi !== undefined) {
+        predictedAqi = modelAqi;
+      } else {
+        const hourOfDay = now.getHours();
+        const diurnalFactor = 1.0 + 0.35 * Math.sin(((hourOfDay - 9) * Math.PI) / 12);
+        predictedAqi = Math.round(baselineAqi * diurnalFactor);
+      }
+
+      const multiplier = baselineAqi > 0 ? predictedAqi / baselineAqi : 1.0;
 
       return {
         hour,
         label: `${dayStr} ${timeStr}`,
-        aqi: Math.min(syntheticAqi, 480),
-        multiplier: diurnalFactor,
+        aqi: Math.min(Math.max(predictedAqi, 20), 500),
+        multiplier,
       };
     });
-  }, [baselineAqi]);
+  }, [baselineAqi, forecastAqiSeries]);
 
   useEffect(() => {
     if (!isPlaying) return;
