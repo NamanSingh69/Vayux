@@ -1,54 +1,93 @@
-import os
-import pickle
+import time
 import numpy as np
-from typing import List, Dict
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
 
-# naman bhai's trained model
-MODEL_PATH = "model_weights.pkl"
+from ml.foundation_loader import FoundationEngineLoader
+from ml.residual_adapter import PhysicsResidualAdapter
 
-def generate_72h_forecast(current_aqi: int, current_pm25: float) -> List[Dict[str, float]]:
-    """
-    Loads the trained ML model (e.g., LSTM / Random Forest).
-    Returns an array of predictions for the next 72 hours.
-    """
-    forecast = []
-    
-    if not os.path.exists(MODEL_PATH):
-        print(f"[ML Warning] {MODEL_PATH} not found. Using physics baseline for now.")
-        for hour in range(73):
-            # Diurnal oscillation: Night inversion traps pollution, daytime heating clears it
-            diurnal_factor = 1.0 + 0.35 * np.sin(((hour - 9) * np.pi) / 12)
-            predicted_pm25 = current_pm25 * diurnal_factor
-            predicted_aqi = min(int(current_aqi * diurnal_factor), 500)
-            
-            forecast.append({
-                "hour_offset": hour,
-                "predicted_pm25": round(predicted_pm25, 1),
-                "predicted_aqi": predicted_aqi,
-                "multiplier": round(diurnal_factor, 3)
-            })
-        return forecast
+router = APIRouter(prefix="/api/v1", tags=["Forecast Engine"])
+
+foundation_loader = FoundationEngineLoader(model_id="amazon/chronos-bolt-tiny", device="cpu")
+physics_adapter = PhysicsResidualAdapter()
+
+class ForecastRequest(BaseModel):
+    latitude: float = Field(default=28.6139, example=28.6139)
+    longitude: float = Field(default=77.2090, example=77.2090)
+    history_pm25: List[float] = Field(default_factory=lambda: [140.0 + 20.0*np.sin(i/3.0) for i in range(168)])
+    h_base: Optional[List[float]] = Field(default=None)
+    u_wind: Optional[List[float]] = Field(default=None)
+    v_wind: Optional[List[float]] = Field(default=None)
+    fire_hotspots: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+
+class ForecastResponse(BaseModel):
+    status: str
+    execution_time_ms: float
+    horizon_hours: int
+    pm25_p10: List[float]
+    pm25_p50: List[float]
+    pm25_p90: List[float]
+    aqi_p50: List[int]
+
+def pm25_to_indian_aqi(pm25: float) -> int:
+    """Calculates standard Indian AQI breakpoints from raw PM2.5 concentrations."""
+    c = max(0.0, pm25)
+    if c <= 30.0:
+        return int((50.0 / 30.0) * c)
+    elif c <= 60.0:
+        return int(50 + ((100 - 50) / (60 - 30)) * (c - 30))
+    elif c <= 90.0:
+        return int(100 + ((200 - 100) / (90 - 60)) * (c - 60))
+    elif c <= 120.0:
+        return int(200 + ((300 - 200) / (120 - 90)) * (c - 90))
+    elif c <= 250.0:
+        return int(300 + ((400 - 300) / (250 - 120)) * (c - 120))
+    else:
+        return min(500, int(400 + ((500 - 400) / (380 - 250)) * (c - 250)))
+
+@router.post("/forecast", response_model=ForecastResponse)
+async def generate_hybrid_forecast(payload: ForecastRequest):
+    t_start = time.perf_counter()
+    horizon = 72
 
     try:
-        with open(MODEL_PATH, 'rb') as f:
-            model = pickle.load(f)
-        
-        current_features = np.array([[current_pm25, current_aqi]]) 
-        
-        for hour in range(73):
-            predicted_pm25 = float(model.predict(current_features)[0])
-            predicted_aqi = min(int((predicted_pm25 / current_pm25) * current_aqi), 500)
-            
-            forecast.append({
-                "hour_offset": hour,
-                "predicted_pm25": round(predicted_pm25, 1),
-                "predicted_aqi": predicted_aqi,
-                "multiplier": round(predicted_pm25 / max(current_pm25, 1), 3)
-            })
-            
-            current_features = np.array([[predicted_pm25, predicted_aqi]])
-            
-    except Exception as e:
-        print(f"[ML Error] Inference failed: {e}")
-        
-    return forecast
+        p10_base, p50_base, p90_base = foundation_loader.predict_zero_shot(
+            history_pm25=payload.history_pm25,
+            prediction_length=horizon
+        )
+
+        h_base = np.array(payload.h_base) if payload.h_base and len(payload.h_base) == horizon \
+            else np.full(horizon, 450.0)
+        u_wind = np.array(payload.u_wind) if payload.u_wind and len(payload.u_wind) == horizon \
+            else np.full(horizon, 1.8)
+        v_wind = np.array(payload.v_wind) if payload.v_wind and len(payload.v_wind) == horizon \
+            else np.full(horizon, 0.9)
+
+        p10_coupled = physics_adapter.apply_coupling(
+            p10_base, h_base, u_wind, v_wind, payload.latitude, payload.longitude, payload.fire_hotspots
+        )
+        p50_coupled = physics_adapter.apply_coupling(
+            p50_base, h_base, u_wind, v_wind, payload.latitude, payload.longitude, payload.fire_hotspots
+        )
+        p90_coupled = physics_adapter.apply_coupling(
+            p90_base, h_base, u_wind, v_wind, payload.latitude, payload.longitude, payload.fire_hotspots
+        )
+
+        aqi_p50 = [pm25_to_indian_aqi(val) for val in p50_coupled]
+        t_elapsed_ms = (time.perf_counter() - t_start) * 1000.0
+
+        return ForecastResponse(
+            status="SUCCESS",
+            execution_time_ms=round(t_elapsed_ms, 2),
+            horizon_hours=horizon,
+            pm25_p10=np.round(p10_coupled, 2).tolist(),
+            pm25_p50=np.round(p50_coupled, 2).tolist(),
+            pm25_p90=np.round(p90_coupled, 2).tolist(),
+            aqi_p50=aqi_p50
+        )
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Hybrid forecast engine error: {str(err)}"
+        )
