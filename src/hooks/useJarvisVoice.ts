@@ -25,7 +25,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const isPlayingRef = useRef(false);
   const nextPlayTimeRef = useRef<number>(0);
-  const speakingTimeoutRef = useRef<number | null>(null);
+  const activeSourcesCountRef = useRef<number>(0);
 
   // Fetch best reasoning model for background cognitive tasks on mount
   useEffect(() => {
@@ -46,9 +46,9 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   }, []);
 
   /**
-   * Pipelined Web Audio Scheduling
-   * Schedules incoming 24kHz PCM chunks seamlessly on the Web Audio hardware clock
-   * to eliminate cracks, pops, and stuttering.
+   * Pipelined Web Audio Scheduling with accurate Active Source Tracking
+   * Schedules incoming 24kHz PCM chunks on hardware clock and guarantees
+   * clean state transition when playback concludes.
    */
   const scheduleAudioChunk = useCallback((chunk: ArrayBuffer) => {
     if (!speakerContextRef.current) {
@@ -61,7 +61,6 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       ctx.resume();
     }
 
-    // Ensure strictly even byte length for 16-bit PCM to prevent alignment distortion
     const validByteLength = chunk.byteLength - (chunk.byteLength % 2);
     if (validByteLength < 4) return;
 
@@ -78,25 +77,22 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     source.connect(ctx.destination);
 
     const now = ctx.currentTime;
-    // Add a tiny 40ms initial jitter buffer on the first chunk so continuous chunks flow seamlessly
-    const startTime = nextPlayTimeRef.current > now ? nextPlayTimeRef.current : (now + 0.04);
+    const startTime = nextPlayTimeRef.current > now ? nextPlayTimeRef.current : (now + 0.035);
     source.start(startTime);
     nextPlayTimeRef.current = startTime + audioBuffer.duration;
 
+    activeSourcesCountRef.current += 1;
     setIsSpeaking(true);
     isPlayingRef.current = true;
 
-    if (speakingTimeoutRef.current) {
-      window.clearTimeout(speakingTimeoutRef.current);
-    }
-    const remainingMs = Math.max(50, (nextPlayTimeRef.current - now) * 1000 + 40);
-    speakingTimeoutRef.current = window.setTimeout(() => {
-      if (speakerContextRef.current && speakerContextRef.current.currentTime >= nextPlayTimeRef.current - 0.05) {
+    source.onended = () => {
+      activeSourcesCountRef.current = Math.max(0, activeSourcesCountRef.current - 1);
+      if (activeSourcesCountRef.current === 0) {
         setIsSpeaking(false);
         isPlayingRef.current = false;
         nextPlayTimeRef.current = 0;
       }
-    }, remainingMs);
+    };
   }, []);
 
   const connect = useCallback(() => {
@@ -111,6 +107,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       setIsRecording(false);
       setIsSpeaking(false);
       isPlayingRef.current = false;
+      activeSourcesCountRef.current = 0;
       nextPlayTimeRef.current = 0;
     };
 
@@ -124,6 +121,20 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
           if (msg.type === 'transcript') {
             setTranscript((prev) => (prev ? prev + ' ' + msg.text : msg.text));
             options.onTranscript?.(msg.text);
+          }
+          if (msg.type === 'turn_complete') {
+            // If all audio sources have already completed playback, un-mute immediately
+            if (activeSourcesCountRef.current === 0) {
+              setIsSpeaking(false);
+              isPlayingRef.current = false;
+              nextPlayTimeRef.current = 0;
+            }
+          }
+          if (msg.type === 'interrupted') {
+            activeSourcesCountRef.current = 0;
+            setIsSpeaking(false);
+            isPlayingRef.current = false;
+            nextPlayTimeRef.current = 0;
           }
         } catch {
           // ignore non-json messages
@@ -165,7 +176,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
 
       processor.onaudioprocess = (e) => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-        // Echo Gating: Mute outgoing mic packets while assistant is speaking to prevent false interruption
+        // Echo Gating: Mute outgoing mic chunks while assistant is speaking to prevent false barge-in
         if (isPlayingRef.current) return;
 
         const inputData = e.inputBuffer.getChannelData(0);
@@ -198,10 +209,8 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     setIsRecording(false);
     setIsSpeaking(false);
     isPlayingRef.current = false;
+    activeSourcesCountRef.current = 0;
     nextPlayTimeRef.current = 0;
-    if (speakingTimeoutRef.current) {
-      window.clearTimeout(speakingTimeoutRef.current);
-    }
   };
 
   const sendTextQuery = (text: string) => {

@@ -118,6 +118,10 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
                 async for response in session.receive():
                     server_content = response.server_content
                     if server_content is not None:
+                        if server_content.interrupted:
+                            logger.info("VayuVani Turn Interrupted by User")
+                            await websocket.send_json({"type": "interrupted"})
+
                         model_turn = server_content.model_turn
                         if model_turn is not None:
                             for part in model_turn.parts:
@@ -126,6 +130,10 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
                                 if part.inline_data:
                                     # Stream 24kHz audio bytes back to browser
                                     await websocket.send_bytes(part.inline_data.data)
+
+                        if server_content.turn_complete:
+                            logger.info("VayuVani Turn Complete")
+                            await websocket.send_json({"type": "turn_complete"})
 
                     # Handle Tool Calls
                     tool_call = response.tool_call
@@ -143,7 +151,7 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
             except WebSocketDisconnect:
                 logger.info("Browser disconnected from audio output stream.")
             except Exception as e:
-                logger.debug(f"Send loop ended: {e}")
+                logger.error(f"Send loop error: {e}")
 
         import asyncio
         await asyncio.gather(receive_from_browser(), send_to_browser())
