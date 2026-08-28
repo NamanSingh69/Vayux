@@ -95,6 +95,7 @@ Based on the active simulation parameters executed in the **VayuX Policy Sandbox
     return {"status": "success", "advisory_markdown": report}
 
     # UptimeRobot Ping Route
+@app.head("/")
 @app.get("/")
 async def root_ping():
     return {"status": "ok", "message": "VayuX Engine is live."}
