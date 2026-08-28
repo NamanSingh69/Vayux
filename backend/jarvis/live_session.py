@@ -94,64 +94,73 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
             try:
                 while True:
                     data = await websocket.receive()
+                    msg_type = data.get("type")
+                    if msg_type == "websocket.disconnect":
+                        logger.info("Browser client disconnected cleanly.")
+                        break
+
                     if "bytes" in data and data["bytes"]:
                         # Forward 16kHz PCM audio chunk directly to Gemini Live
                         await session.send_realtime_input(
-                            audio=types.Blob(mime_type="audio/pcm;rate=16000", data=data["bytes"])
+                            media=types.Blob(mime_type="audio/pcm;rate=16000", data=data["bytes"])
                         )
                     elif "text" in data and data["text"]:
                         msg = json.loads(data["text"])
+                        logger.info(f"Received client message: {msg.get('type')}")
                         if msg.get("type") == "text_query":
                             query_text = msg.get("text", "")
                             if query_text:
+                                logger.info(f"Forwarding text query to Gemini Live: '{query_text}'")
                                 await session.send_client_content(
                                     turns=types.Content(role="user", parts=[types.Part(text=query_text)]),
                                     turn_complete=True
                                 )
+                                logger.info("Successfully sent text query to Gemini Live")
             except WebSocketDisconnect:
                 logger.info("Browser disconnected from audio input stream.")
             except Exception as e:
-                logger.debug(f"Receive loop ended: {e}")
+                logger.error(f"Receive loop error: {e}", exc_info=True)
 
         async def send_to_browser():
             try:
-                async for response in session.receive():
-                    server_content = response.server_content
-                    if server_content is not None:
-                        if server_content.interrupted:
-                            logger.info("VayuVani Turn Interrupted by User")
-                            await websocket.send_json({"type": "interrupted"})
+                while True:
+                    async for response in session.receive():
+                        server_content = response.server_content
+                        if server_content is not None:
+                            if server_content.interrupted:
+                                logger.info("VayuVani Turn Interrupted by User")
+                                await websocket.send_json({"type": "interrupted"})
 
-                        model_turn = server_content.model_turn
-                        if model_turn is not None:
-                            for part in model_turn.parts:
-                                if part.text:
-                                    await websocket.send_json({"type": "transcript", "text": part.text})
-                                if part.inline_data:
-                                    # Stream 24kHz audio bytes back to browser
-                                    await websocket.send_bytes(part.inline_data.data)
+                            model_turn = server_content.model_turn
+                            if model_turn is not None:
+                                for part in model_turn.parts:
+                                    if part.text:
+                                        await websocket.send_json({"type": "transcript", "text": part.text})
+                                    if part.inline_data:
+                                        # Stream 24kHz audio bytes back to browser
+                                        await websocket.send_bytes(part.inline_data.data)
 
-                        if server_content.turn_complete:
-                            logger.info("VayuVani Turn Complete")
-                            await websocket.send_json({"type": "turn_complete"})
+                            if server_content.turn_complete:
+                                logger.info("VayuVani Turn Complete")
+                                await websocket.send_json({"type": "turn_complete"})
 
-                    # Handle Tool Calls
-                    tool_call = response.tool_call
-                    if tool_call is not None:
-                        for fc in tool_call.function_calls:
-                            logger.info(f"VayuVani Tool Invocation: {fc.name}")
-                            tool_result = await execute_jarvis_tool(fc.name, fc.args)
-                            await session.send_tool_response(
-                                function_responses=[types.FunctionResponse(
-                                    name=fc.name,
-                                    id=fc.id,
-                                    response={"result": tool_result}
-                                )]
-                            )
+                        # Handle Tool Calls
+                        tool_call = response.tool_call
+                        if tool_call is not None:
+                            for fc in tool_call.function_calls:
+                                logger.info(f"VayuVani Tool Invocation: {fc.name}")
+                                tool_result = await execute_jarvis_tool(fc.name, fc.args)
+                                await session.send_tool_response(
+                                    function_responses=[types.FunctionResponse(
+                                        name=fc.name,
+                                        id=fc.id,
+                                        response={"result": tool_result}
+                                    )]
+                                )
             except WebSocketDisconnect:
                 logger.info("Browser disconnected from audio output stream.")
             except Exception as e:
-                logger.error(f"Send loop error: {e}")
+                logger.error(f"Send loop error: {e}", exc_info=True)
 
         import asyncio
         await asyncio.gather(receive_from_browser(), send_to_browser())

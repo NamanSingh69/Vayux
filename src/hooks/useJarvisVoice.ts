@@ -5,6 +5,36 @@ interface UseJarvisVoiceOptions {
   onTranscript?: (text: string) => void;
 }
 
+/**
+ * High-quality linear downsampling filter to convert browser microphone
+ * audio (typically 44.1kHz or 48kHz) to 16kHz 16-bit PCM expected by Gemini Live.
+ */
+function downsampleTo16k(input: Float32Array, sampleRate: number): Int16Array {
+  if (sampleRate === 16000) {
+    const pcm16 = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return pcm16;
+  }
+
+  const ratio = sampleRate / 16000;
+  const newLength = Math.round(input.length / ratio);
+  const pcm16 = new Int16Array(newLength);
+
+  for (let i = 0; i < newLength; i++) {
+    const srcIndex = i * ratio;
+    const srcIndexFloor = Math.floor(srcIndex);
+    const srcIndexCeil = Math.min(input.length - 1, Math.ceil(srcIndex));
+    const weight = srcIndex - srcIndexFloor;
+    const sample = input[srcIndexFloor] * (1 - weight) + input[srcIndexCeil] * weight;
+    const s = Math.max(-1, Math.min(1, sample));
+    pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return pcm16;
+}
+
 export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const wsUrl = options.wsUrl || process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/jarvis-live";
   
@@ -47,11 +77,9 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
 
   /**
    * Pipelined Web Audio Scheduling with accurate Active Source Tracking
-   * Schedules incoming 24kHz PCM chunks on hardware clock and guarantees
-   * clean state transition when playback concludes.
    */
   const scheduleAudioChunk = useCallback((chunk: ArrayBuffer) => {
-    if (!speakerContextRef.current) {
+    if (!speakerContextRef.current || speakerContextRef.current.state === 'closed') {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       speakerContextRef.current = new AudioCtx({ sampleRate: 24000 });
     }
@@ -123,7 +151,6 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
             options.onTranscript?.(msg.text);
           }
           if (msg.type === 'turn_complete') {
-            // If all audio sources have already completed playback, un-mute immediately
             if (activeSourcesCountRef.current === 0) {
               setIsSpeaking(false);
               isPlayingRef.current = false;
@@ -153,7 +180,6 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
@@ -162,8 +188,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       mediaStreamRef.current = stream;
 
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const audioCtx = new AudioCtx({ sampleRate: 16000 });
-      
+      const audioCtx = new AudioCtx();
       micContextRef.current = audioCtx;
       
       if (audioCtx.state === 'suspended') {
@@ -173,6 +198,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       micSourceRef.current = source;
       
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      const actualSampleRate = audioCtx.sampleRate;
 
       processor.onaudioprocess = (e) => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) return;
@@ -180,11 +206,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
         if (isPlayingRef.current) return;
 
         const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
+        const pcm16 = downsampleTo16k(inputData, actualSampleRate);
         wsRef.current.send(pcm16.buffer);
       };
 

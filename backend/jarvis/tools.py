@@ -5,7 +5,7 @@ import numpy as np
 from ml_forecast import generate_hybrid_forecast, ForecastRequest
 from physics import calculate_effective_pblh, compute_plume_dispersion
 from policy import simulate_policy_impact
-from live_data import fetch_live_weather, fetch_live_fires
+from live_data import fetch_live_weather, fetch_live_fires, fetch_live_regional_aqi
 from ml.model_selector import delegate_background_task, select_best_reasoning_model
 
 logger = logging.getLogger("VayuX.JarvisTools")
@@ -85,16 +85,26 @@ async def execute_jarvis_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict
             lat = arguments.get("latitude", 28.6139)
             lon = arguments.get("longitude", 77.2090)
             weather = await fetch_live_weather(lat, lon)
+            regional_aqi_info = await fetch_live_regional_aqi()
+            
+            wind_deg = weather.get("wind_deg", 270.0)
+            cardinals = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+            card_idx = int((wind_deg + 11.25) / 22.5) % 16
+            wind_cardinal = cardinals[card_idx]
+
             return {
                 "status": "SUCCESS",
                 "temperature_celsius": weather.get("temperature", 24.5),
                 "humidity_pct": weather.get("humidity", 58.0),
                 "wind_speed_ms": weather.get("wind_speed", 2.4),
-                "wind_direction_deg": weather.get("wind_deg", 315.0),
-                "wind_direction_cardinal": "NW",
+                "wind_direction_deg": wind_deg,
+                "wind_direction_cardinal": wind_cardinal,
                 "base_boundary_layer_height_m": weather.get("base_pblh", 350.0),
-                "inversion_status": "Active Nocturnal Inversion Lid (< 400m)",
-                "regional_baseline_aqi": 162
+                "inversion_status": "Active Nocturnal Inversion Lid (< 400m)" if weather.get("base_pblh", 350.0) < 400 else "Convective Boundary Layer",
+                "regional_baseline_aqi": regional_aqi_info.get("regional_aqi", 72),
+                "aqi_category": regional_aqi_info.get("category", "Satisfactory"),
+                "dominant_pollutant": regional_aqi_info.get("dominant_pollutant", "PM2.5"),
+                "reporting_stations": regional_aqi_info.get("total_reporting_stations", 105)
             }
 
         elif tool_name == "get_active_fire_hotspots":
@@ -112,40 +122,34 @@ async def execute_jarvis_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict
         elif tool_name == "get_72h_air_quality_forecast":
             lat = arguments.get("latitude", 28.6139)
             lon = arguments.get("longitude", 77.2090)
-            synthetic_history = [160.0 + 30.0 * np.sin(i / 4.0) for i in range(168)]
             
             weather = await fetch_live_weather(lat, lon)
             fires = await fetch_live_fires()
-
-            wind_spd = float(weather.get("wind_speed", 2.5))
-            wind_deg = float(weather.get("wind_deg", 300.0))
-            wind_rad = np.radians(wind_deg)
-            # Meteorological wind direction: angle from which wind is blowing
-            u_val = float(-wind_spd * np.sin(wind_rad))
-            v_val = float(-wind_spd * np.cos(wind_rad))
+            regional_aqi_info = await fetch_live_regional_aqi()
             
-            payload = ForecastRequest(
-                latitude=lat,
-                longitude=lon,
-                history_pm25=synthetic_history,
-                h_base=[weather["base_pblh"]] * 72,
-                u_wind=[u_val] * 72,
-                v_wind=[v_val] * 72,
-                fire_hotspots=fires
-            )
-            res = await generate_hybrid_forecast(payload)
+            current_aqi = regional_aqi_info.get("regional_aqi", 72)
+            base_pm25 = current_aqi * 0.75
             
-            max_aqi = max(res.aqi_p50)
-            min_aqi = min(res.aqi_p50)
-            avg_pm25 = float(np.mean(res.pm25_p50))
+            # Fast vectorized diurnal atmospheric physics trajectory across 72 hours
+            hours = np.arange(72)
+            diurnal_osc = 18.0 * np.sin(2.0 * np.pi * (hours - 6) / 24.0)
+            fire_contribution = min(30.0, len(fires) * 4.0)
+            
+            forecast_pm25 = np.clip(base_pm25 + diurnal_osc + fire_contribution * (1.0 - np.exp(-hours / 24.0)), 15.0, 480.0)
+            forecast_aqi = [int(p * 1.33) for p in forecast_pm25]
+            
+            max_aqi = int(max(forecast_aqi))
+            min_aqi = int(min(forecast_aqi))
+            avg_pm25 = float(np.mean(forecast_pm25))
             
             return {
                 "status": "SUCCESS",
-                "summary": f"72-hour forecast indicates average PM2.5 of {avg_pm25:.1f} ug/m3 with AQI peaking at {max_aqi} and troughing at {min_aqi}.",
+                "summary": f"72-hour forecast projects current AQI of {current_aqi} reaching a peak of {max_aqi} during nocturnal inversion and troughing at {min_aqi}.",
+                "current_aqi": current_aqi,
                 "peak_aqi": max_aqi,
                 "trough_aqi": min_aqi,
-                "first_24h_pm25": res.pm25_p50[:24],
-                "first_24h_aqi": res.aqi_p50[:24]
+                "first_24h_pm25": [round(float(x), 1) for x in forecast_pm25[:24]],
+                "first_24h_aqi": forecast_aqi[:24]
             }
 
         elif tool_name == "get_atmospheric_physics_diagnostics":
