@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -28,7 +29,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body className="bg-slate-950 text-slate-100 antialiased">
+        <OfflineBanner />
+        {children}
+      </body>
     </html>
   );
 }
