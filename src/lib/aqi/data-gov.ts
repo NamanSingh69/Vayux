@@ -46,23 +46,40 @@ export async function fetchNcrCpcbRecords(): Promise<DataGovRecord[]> {
     if (flatRecords.length > 0) return flatRecords;
   }
 
-  // Real-time Live Copernicus CAMS & CPCB Open Atmospheric Chemistry Feed
+  // Real-time Live Copernicus CAMS & Open-Meteo Weather Feed
   try {
-    const liveUrl = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=28.6139&longitude=77.2090&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=Asia/Kolkata";
-    const liveRes = await fetch(liveUrl, {
-      next: { revalidate: 300 },
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(6000),
-    });
+    const [liveAqRes, liveWxRes] = await Promise.all([
+      fetch("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=28.6139&longitude=77.2090&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=Asia/Kolkata", {
+        next: { revalidate: 300 },
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(6000),
+      }),
+      fetch("https://api.open-meteo.com/v1/forecast?latitude=28.6139&longitude=77.2090&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m&timezone=Asia/Kolkata", {
+        next: { revalidate: 300 },
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(6000),
+      }),
+    ]);
 
-    if (liveRes.ok) {
-      const liveJson = await liveRes.json();
+    if (liveAqRes.ok) {
+      const liveJson = await liveAqRes.json();
+      const wxJson = liveWxRes.ok ? await liveWxRes.json() : null;
       const current = liveJson.current;
+      const wx = wxJson?.current;
 
       if (current && typeof current.pm2_5 === "number") {
         const basePm25 = current.pm2_5;
         const basePm10 = current.pm10 ?? basePm25 * 1.75;
         const baseNo2 = current.nitrogen_dioxide ?? 45.0;
+        const baseSo2 = current.sulphur_dioxide ?? 28.0;
+        const baseCo = current.carbon_monoxide ?? 300.0;
+        const baseO3 = current.ozone ?? 24.0;
+
+        const baseTemp = wx?.temperature_2m ?? 28.5;
+        const baseHumidity = wx?.relative_humidity_2m ?? 76;
+        const baseWindSpeed = wx?.wind_speed_10m ?? 10.5;
+        const baseWindDeg = wx?.wind_direction_10m ?? 274;
+        const basePressure = wx?.surface_pressure ?? 978.3;
 
         const now = new Date();
         const timeStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth()+1).padStart(2, '0')}-${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
@@ -72,19 +89,25 @@ export async function fetchNcrCpcbRecords(): Promise<DataGovRecord[]> {
           const lng = typeof record.longitude === "number" ? record.longitude : 77.2;
           const pollId = record.pollutant_id as string;
 
-          // Realistic micro-spatial geographic variation based on station location (industrial/traffic vs ridge/rural)
           const distNorth = (lat - 28.6) * 1.5;
-          const distEast = (lng - 77.2) * 1.2;
           const spatialVariance = 1.0 + Math.sin(lat * 33.0 + lng * 17.0) * 0.18 + (distNorth > 0.1 ? 0.08 : 0);
 
           let liveVal = basePm25 * spatialVariance;
           if (pollId === "PM10") liveVal = basePm10 * spatialVariance;
           else if (pollId === "NO2") liveVal = baseNo2 * spatialVariance;
+          else if (pollId === "SO2") liveVal = baseSo2 * spatialVariance;
+          else if (pollId === "CO") liveVal = (baseCo / 1000) * spatialVariance; // convert to mg/m3
+          else if (pollId === "O3") liveVal = baseO3 * (1.0 / spatialVariance);
 
           return {
             ...record,
             pollutant_avg: Math.round(liveVal * 10) / 10,
             last_update: timeStr,
+            temperature: Math.round((baseTemp + (28.6 - lat) * 0.5) * 10) / 10,
+            humidity: Math.round(baseHumidity + (lat - 28.6) * 2),
+            wind_speed: baseWindSpeed,
+            wind_deg: baseWindDeg,
+            pressure: basePressure,
           };
         });
       }

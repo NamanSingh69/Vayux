@@ -22,6 +22,11 @@ export async function getNcrAqi(): Promise<AqiApiResponse> {
       so2: reading.pollutants.so2,
       co: reading.pollutants.co,
       o3: reading.pollutants.o3,
+      temperature: reading.temperature,
+      humidity: reading.humidity,
+      windSpeed: reading.windSpeed,
+      windDeg: reading.windDeg,
+      pressure: reading.pressure,
     },
   }));
   const stations: StationFeatureCollection = { type: "FeatureCollection", features };

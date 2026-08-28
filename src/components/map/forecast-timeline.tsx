@@ -50,6 +50,15 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
       const timeStr = now.toLocaleTimeString("en-IN", { hour: "numeric", hour12: true });
       const dayStr = now.toLocaleDateString("en-IN", { weekday: "short" });
 
+      if (hour === 0) {
+        return {
+          hour: 0,
+          label: `${dayStr} ${timeStr}`,
+          aqi: baselineAqi,
+          multiplier: 1.0,
+        };
+      }
+
       const modelAqi = forecastAqiSeries[hour];
       let predictedAqi = baselineAqi;
 
@@ -57,7 +66,7 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
         predictedAqi = modelAqi;
       } else {
         const hourOfDay = now.getHours();
-        const diurnalFactor = 1.0 + 0.35 * Math.sin(((hourOfDay - 9) * Math.PI) / 12);
+        const diurnalFactor = 1.0 + 0.28 * Math.sin(((hourOfDay - 9) * Math.PI) / 12) - (hour / 220);
         predictedAqi = Math.round(baselineAqi * diurnalFactor);
       }
 

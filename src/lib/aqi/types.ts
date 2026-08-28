@@ -19,6 +19,11 @@ export interface StationReading {
   aqi: number;
   category: AqiCategory;
   dominantPollutant: string;
+  temperature?: number;
+  humidity?: number;
+  windSpeed?: number;
+  windDeg?: number;
+  pressure?: number;
 }
 
 export interface StationProperties {
@@ -33,6 +38,11 @@ export interface StationProperties {
   so2?: number;
   co?: number;
   o3?: number;
+  temperature?: number;
+  humidity?: number;
+  windSpeed?: number;
+  windDeg?: number;
+  pressure?: number;
 }
 
 export type StationFeatureCollection = FeatureCollection<Point, StationProperties>;

@@ -37,6 +37,17 @@ export function DelhiAqiMap() {
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (aqiData && !selectedStation) {
+      const defaultMatch =
+        aqiData.stations.features.find((f) => f.properties.station.toLowerCase().includes("jahangirpuri")) ??
+        aqiData.stations.features[0];
+      if (defaultMatch) {
+        setSelectedStation(defaultMatch.properties);
+      }
+    }
+  }, [aqiData, selectedStation]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
@@ -297,6 +308,9 @@ export function DelhiAqiMap() {
     return stationOptions.filter((station) => station.toLowerCase().includes(needle)).length;
   }, [stationOptions, stationQuery]);
 
+  const [activeLayer, setActiveLayer] = useState<"AQI" | "PM2.5" | "PM10" | "Temperature" | "Humidity">("AQI");
+  const [showLayerMenu, setShowLayerMenu] = useState(false);
+
   const filteredStations = useMemo(() => {
     const needle = stationQuery.trim().toLowerCase();
     if (!needle) return aqiData?.stations.features ?? [];
@@ -311,6 +325,34 @@ export function DelhiAqiMap() {
       <div className={styles.mapVeil} aria-hidden="true" />
       <MapStatus state={state} updatedAt={updatedAt} metrics={metrics} />
       <section className={styles.commandPanel} aria-label="Delhi NCR command center">
+        <div className={styles.layerSelectorWrap}>
+          <button
+            type="button"
+            className={styles.layerSelectorBtn}
+            onClick={() => setShowLayerMenu(!showLayerMenu)}
+          >
+            <span>Layer: <strong>{activeLayer}</strong></span>
+            <span>▾</span>
+          </button>
+          {showLayerMenu && (
+            <div className={styles.layerMenu}>
+              {(["AQI", "PM2.5", "PM10", "Temperature", "Humidity"] as const).map((layer) => (
+                <div
+                  key={layer}
+                  className={`${styles.layerMenuItem} ${activeLayer === layer ? styles.layerMenuActive : ""}`}
+                  onClick={() => {
+                    setActiveLayer(layer);
+                    setShowLayerMenu(false);
+                  }}
+                >
+                  {activeLayer === layer && <span className={styles.layerActivePip} />}
+                  <span>{layer}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div ref={searchContainerRef} className={styles.searchContainer}>
           <form
             className={styles.searchShell}
@@ -426,8 +468,8 @@ export function DelhiAqiMap() {
         </div>
       </section>
       <StationDetailDrawer station={selectedStation} onClose={() => setSelectedStation(null)} />
-      <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
-      <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
+      <PolicySandbox baselineAqi={metrics.regionalAqi ?? 235} />
+      <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 235} />
       <AqiLegend />
     </main>
   );
