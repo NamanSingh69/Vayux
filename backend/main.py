@@ -94,6 +94,11 @@ Based on the active simulation parameters executed in the **VayuX Policy Sandbox
 """
     return {"status": "success", "advisory_markdown": report}
 
+    # UptimeRobot Ping Route
+@app.get("/")
+async def root_ping():
+    return {"status": "ok", "message": "VayuX Engine is live."}
+
 class PolicySimulationRequest(BaseModel):
     baseline_aqi: int = Field(default=340)
     baseline_pm25: Optional[float] = Field(default=None)
