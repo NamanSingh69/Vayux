@@ -58,14 +58,21 @@ async def execute_jarvis_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict
             
             weather = await fetch_live_weather(lat, lon)
             fires = await fetch_live_fires()
+
+            wind_spd = float(weather.get("wind_speed", 2.5))
+            wind_deg = float(weather.get("wind_deg", 300.0))
+            wind_rad = np.radians(wind_deg)
+            # Meteorological wind direction: angle from which wind is blowing
+            u_val = float(-wind_spd * np.sin(wind_rad))
+            v_val = float(-wind_spd * np.cos(wind_rad))
             
             payload = ForecastRequest(
                 latitude=lat,
                 longitude=lon,
                 history_pm25=synthetic_history,
                 h_base=[weather["base_pblh"]] * 72,
-                u_wind=[weather["wind_speed"]] * 72,
-                v_wind=[0.5] * 72,
+                u_wind=[u_val] * 72,
+                v_wind=[v_val] * 72,
                 fire_hotspots=fires
             )
             res = await generate_hybrid_forecast(payload)

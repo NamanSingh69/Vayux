@@ -518,7 +518,11 @@ export function DelhiAqiMap() {
       </section>
       <StationDetailDrawer station={selectedStation} onClose={() => setSelectedStation(null)} />
       <PolicySandbox baselineAqi={metrics.regionalAqi ?? 235} />
-      <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 235} />
+      <ForecastTimeline
+        onHourChange={handleForecastChange}
+        baselineAqi={selectedStation ? selectedStation.aqi : (metrics.regionalAqi ?? 235)}
+        stationName={selectedStation ? selectedStation.station : undefined}
+      />
       <AqiLegend activeLayer={activeLayer} />
     </main>
   );

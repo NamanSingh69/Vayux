@@ -53,11 +53,18 @@ async def fetch_live_fires() -> List[Dict[str, float]]:
                 for line in lines:
                     parts = line.split(',')
                     if len(parts) >= 3:
-                        fires.append({
-                            "lat": float(parts[0]),
-                            "lon": float(parts[1]),
-                            "frp": float(parts[3]) 
-                        })
+                        try:
+                            lat_val = float(parts[0])
+                            lon_val = float(parts[1])
+                            # Column 12 is FRP (MW) in standard NASA FIRMS VIIRS NRT CSV
+                            frp_val = float(parts[12]) if len(parts) >= 13 else 35.0
+                            fires.append({
+                                "lat": lat_val,
+                                "lon": lon_val,
+                                "frp": max(5.0, frp_val)
+                            })
+                        except (ValueError, IndexError):
+                            continue
                 return fires if fires else fallback_fires
         except Exception as e:
             print(f"[FIRMS API Error] {e}")

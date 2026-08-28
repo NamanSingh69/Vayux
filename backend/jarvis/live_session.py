@@ -37,7 +37,7 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
 
     client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
     # SOTA Gemini Native Audio Streaming Engine
-    model_id = "gemini-2.5-flash-native-audio-latest"
+    model_id = os.getenv("GEMINI_LIVE_MODEL", "gemini-2.0-flash-exp")
 
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],

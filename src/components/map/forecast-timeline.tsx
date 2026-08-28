@@ -1,17 +1,24 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import gsap from "gsap";
 import { CPCB_AQI_SCALE } from "@/lib/aqi/cpcb";
 import styles from "./map.module.css";
 
 interface ForecastTimelineProps {
-  onHourChange?: (hourOffset: number, simulatedMultiplier: number) => void;
+  onHourChange?: (hourOffset: number, simulatedMultiplier: number, aqi: number) => void;
   baselineAqi: number;
+  stationName?: string;
 }
 
-export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimelineProps) {
-  const [selectedHour, setSelectedHour] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+export function ForecastTimeline({ onHourChange, baselineAqi, stationName }: ForecastTimelineProps) {
+  const [selectedHour, setSelectedHour] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [forecastStart] = useState<Date>(() => new Date());
+  const valueRef = useRef<HTMLElement>(null);
+  const categoryRef = useRef<HTMLSpanElement>(null);
+  const previousAqiRef = useRef<number | null>(null);
+
   const [forecastAqiSeries, setForecastAqiSeries] = useState<number[]>([]);
 
   useEffect(() => {
@@ -21,6 +28,7 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            baseline_aqi: baselineAqi,
             history_pm25: [
               Math.max(30, baselineAqi * 0.7),
               Math.max(30, baselineAqi * 0.72),
@@ -37,109 +45,186 @@ export function ForecastTimeline({ onHourChange, baselineAqi }: ForecastTimeline
           }
         }
       } catch {
-        // Fallback handled in useMemo
+        // Handled via phase-normalized mathematical diurnal fallback
       }
     }
     loadForecast();
   }, [baselineAqi]);
 
   const hourlyData = useMemo(() => {
+    const start = forecastStart || new Date();
+    const currentHourOfDay = start.getHours();
+    const basePhase = ((currentHourOfDay - 9) * Math.PI) / 12;
+    const baseSin = Math.sin(basePhase);
+
     return Array.from({ length: 73 }, (_, hour) => {
-      const now = new Date();
-      now.setHours(now.getHours() + hour);
-      const timeStr = now.toLocaleTimeString("en-IN", { hour: "numeric", hour12: true });
-      const dayStr = now.toLocaleDateString("en-IN", { weekday: "short" });
+      const forecastTime = new Date(start);
+      forecastTime.setHours(forecastTime.getHours() + hour);
+      const timeStr = forecastTime.toLocaleTimeString("en-IN", { hour: "numeric", hour12: true });
+      const dayStr = forecastTime.toLocaleDateString("en-IN", { weekday: "short" });
+      const label = hour === 0 ? "Now" : `${dayStr} · ${timeStr}`;
 
-      if (hour === 0) {
-        return {
-          hour: 0,
-          label: `${dayStr} ${timeStr}`,
-          aqi: baselineAqi,
-          multiplier: 1.0,
-        };
-      }
+      if (hour === 0) return { hour, label, aqi: baselineAqi, multiplier: 1.0 };
 
-      const modelAqi = forecastAqiSeries[hour];
+      // forecastAqiSeries contains 72 hourly forecast steps (index 0 = hour 1)
+      const modelAqi = forecastAqiSeries[hour - 1];
       let predictedAqi = baselineAqi;
 
-      if (modelAqi !== undefined) {
+      if (typeof modelAqi === "number" && Number.isFinite(modelAqi)) {
         predictedAqi = modelAqi;
       } else {
-        const hourOfDay = now.getHours();
-        const diurnalFactor = 1.0 + 0.28 * Math.sin(((hourOfDay - 9) * Math.PI) / 12) - (hour / 220);
-        predictedAqi = Math.round(baselineAqi * diurnalFactor);
+        const hourOfDay = forecastTime.getHours();
+        const hourPhase = ((hourOfDay - 9) * Math.PI) / 12;
+        const diurnalDiff = Math.sin(hourPhase) - baseSin;
+        const diurnalMultiplier = 1.0 + 0.20 * diurnalDiff - (hour / 250);
+        predictedAqi = Math.round(baselineAqi * diurnalMultiplier);
       }
 
       const multiplier = baselineAqi > 0 ? predictedAqi / baselineAqi : 1.0;
 
       return {
         hour,
-        label: `${dayStr} ${timeStr}`,
+        label,
         aqi: Math.min(Math.max(predictedAqi, 20), 500),
         multiplier,
       };
     });
-  }, [baselineAqi, forecastAqiSeries]);
+  }, [baselineAqi, forecastStart, forecastAqiSeries]);
 
   useEffect(() => {
     if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setSelectedHour((prev) => {
-        if (prev >= 72) {
+    const interval = window.setInterval(() => {
+      setSelectedHour((current) => {
+        if (current >= 72) {
           setIsPlaying(false);
           return 72;
         }
-        return prev + 1;
+        return current + 1;
       });
     }, 400);
-
-    return () => clearInterval(interval);
+    return () => window.clearInterval(interval);
   }, [isPlaying]);
 
-  useEffect(() => {
-    const current = hourlyData[selectedHour];
-    if (current && onHourChange) {
-      onHourChange(selectedHour, current.multiplier);
-    }
-  }, [selectedHour, hourlyData, onHourChange]);
-
   const currentItem = hourlyData[selectedHour] ?? hourlyData[0];
-  const aqiColor = CPCB_AQI_SCALE.find((s) => currentItem.aqi <= s.max)?.color ?? "#8f273b";
+  const currentBand = CPCB_AQI_SCALE.find((item) => currentItem.aqi <= item.max)
+    ?? CPCB_AQI_SCALE[CPCB_AQI_SCALE.length - 1];
+  const previousItem = hourlyData[Math.max(0, selectedHour - 1)] ?? currentItem;
+  const delta = currentItem.aqi - previousItem.aqi;
+  const progress = (selectedHour / 72) * 100;
+
+  useEffect(() => {
+    onHourChange?.(selectedHour, currentItem.multiplier, currentItem.aqi);
+  }, [selectedHour, currentItem, onHourChange]);
+
+  useEffect(() => {
+    const previousAqi = previousAqiRef.current;
+    previousAqiRef.current = currentItem.aqi;
+    if (previousAqi === null || previousAqi === currentItem.aqi) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const context = gsap.context(() => {
+      gsap.timeline()
+        .fromTo(valueRef.current, {
+          autoAlpha: 0.35,
+          y: currentItem.aqi > previousAqi ? 7 : -7,
+          scale: 0.9,
+        }, {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.34,
+          ease: "back.out(1.8)",
+        })
+        .fromTo(categoryRef.current, { autoAlpha: 0.4, x: -5 }, {
+          autoAlpha: 1,
+          x: 0,
+          duration: 0.24,
+          ease: "power2.out",
+        }, "<0.04");
+    });
+    return () => context.revert();
+  }, [currentItem.aqi]);
+
+  const togglePlayback = useCallback(() => {
+    if (isPlaying) {
+      setIsPlaying(false);
+      return;
+    }
+    if (selectedHour >= 72) setSelectedHour(0);
+    setIsPlaying(true);
+  }, [isPlaying, selectedHour]);
+
+  const trendLabel = selectedHour === 0
+    ? (stationName ? "Station baseline" : "Regional baseline")
+    : delta === 0
+      ? "Steady"
+      : `${delta > 0 ? "↑" : "↓"} ${Math.abs(delta)} vs prior hour`;
 
   return (
-    <aside className={styles.forecast} aria-label="Forecast timeline" style={{ "--forecast-accent": aqiColor } as React.CSSProperties}>
+    <aside
+      className={styles.forecast}
+      aria-label="Forecast timeline"
+      data-playing={isPlaying}
+      style={{
+        "--forecast-accent": currentBand.color,
+        "--forecast-progress": `${progress}%`,
+      } as CSSProperties}
+    >
       <div className={styles.forecastTop}>
-        <div>
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-          >
-            {isPlaying ? "Pause" : "Play 72h"}
-          </button>
-          <span>
-            {selectedHour === 0 ? "Live Monitoring (Now)" : `+${selectedHour}h Forecast (${currentItem.label})`}
-          </span>
+        <div className={styles.forecastIdentity}>
+          <span className={styles.forecastPulse} aria-hidden="true" />
+          <div>
+            <span className={styles.forecastEyebrow}>
+              72h Outlook {stationName ? `· ${stationName.split(",")[0]}` : "· Delhi NCR"}
+            </span>
+            <strong>{selectedHour === 0 ? "Live conditions" : currentItem.label}</strong>
+          </div>
         </div>
 
-        <div>
-          <span>Predicted AQI</span>
-          <strong>{currentItem.aqi}</strong>
+        <div className={styles.forecastReading} aria-live="polite">
+          <div>
+            <span ref={categoryRef} className={styles.forecastCategory}>{currentBand.label}</span>
+            <small>{trendLabel}</small>
+          </div>
+          <strong ref={valueRef}>{currentItem.aqi}</strong>
         </div>
       </div>
 
-      <input
-        type="range"
-        min={0}
-        max={72}
-        step={1}
-        value={selectedHour}
-        onChange={(e) => setSelectedHour(parseInt(e.target.value, 10))}
-      />
+      <div className={styles.forecastControls}>
+        <button
+          type="button"
+          onClick={togglePlayback}
+          aria-label={isPlaying ? "Pause forecast" : selectedHour >= 72 ? "Replay 72-hour forecast" : "Play 72-hour forecast"}
+          title={isPlaying ? "Pause forecast" : selectedHour >= 72 ? "Replay forecast" : "Play forecast"}
+          aria-pressed={isPlaying}
+        >
+          <span className={isPlaying ? styles.pauseIcon : styles.playIcon} aria-hidden="true" />
+        </button>
+        <div className={styles.forecastOffset}>
+          <strong>{selectedHour === 0 ? "Now" : `+${selectedHour} hours`}</strong>
+          <span>Drag to explore</span>
+        </div>
+      </div>
 
-      <div className={styles.forecastTicks}>
+      <div className={styles.forecastScrubber}>
+        <span className={styles.forecastProgress} aria-hidden="true" />
+        <input
+          type="range"
+          aria-label="Forecast hour offset"
+          aria-valuetext={selectedHour === 0 ? "Now" : `${selectedHour} hours from now`}
+          min={0}
+          max={72}
+          step={1}
+          value={selectedHour}
+          onChange={(event) => setSelectedHour(Number.parseInt(event.target.value, 10))}
+        />
+      </div>
+
+      <div className={styles.forecastTicks} aria-hidden="true">
         <span>Now</span>
-        <span>+24 Hours</span>
-        <span>+48 Hours</span>
-        <span>+72 Hours</span>
+        <span>24h</span>
+        <span>48h</span>
+        <span>72h</span>
       </div>
     </aside>
   );
