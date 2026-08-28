@@ -127,6 +127,7 @@ Based on the active simulation parameters executed in the **VayuX Policy Sandbox
 3. **Public Advisory:** Issue an orange-level health alert via the **VayuVani Voice Network**, advising vulnerable populations to restrict outdoor exposure.
 
 *Report automatically generated and verified by the VayuX Two-Way Coupled Atmospheric Engine.*
+"""
     return {"status": "success", "advisory_markdown": fallback_report, "model": "template-fallback"}
 
 class PolicySimulationRequest(BaseModel):
