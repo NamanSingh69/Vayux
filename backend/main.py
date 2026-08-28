@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, WebSocket, Body ,AProuter, HTTPException
+from fastapi import FastAPI, WebSocket, Body ,APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
