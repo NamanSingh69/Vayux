@@ -1,12 +1,11 @@
 import interpolate from "@turf/interpolate";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import { clampAqi } from "./cpcb";
+import { NCR_INTERPOLATION_BBOX } from "./config";
 import type { StationFeatureCollection, SurfaceFeatureCollection } from "./types";
 
-// Keep the grid buffered beyond the camera bounds so its feathered edge is
-// never visible as a rectangle while navigating Delhi NCR.
-export const NCR_INTERPOLATION_BBOX: [number, number, number, number] = [74.9, 25.9, 79.3, 31.1];
-
+// Keep the grid buffered beyond the camera bounds so its edge is never visible
+// while navigating Delhi NCR. The client shades these samples continuously.
 export function createAqiSurface(stations: StationFeatureCollection): SurfaceFeatureCollection {
   if (stations.features.length < 2) return { type: "FeatureCollection", features: [] };
 

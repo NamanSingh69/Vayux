@@ -8,12 +8,12 @@ export const CPCB_AQI_SCALE: ReadonlyArray<{
   label: AqiCategory;
   color: string;
 }> = [
-  { min: 0, max: 50, label: "Good", color: "#34a853" },
-  { min: 51, max: 100, label: "Satisfactory", color: "#9acd4a" },
-  { min: 101, max: 200, label: "Moderate", color: "#f6d447" },
-  { min: 201, max: 300, label: "Poor", color: "#ef972e" },
-  { min: 301, max: 400, label: "Very Poor", color: "#e44a3a" },
-  { min: 401, max: 500, label: "Severe", color: "#8f273b" },
+  { min: 0, max: 50, label: "Good", color: "#18a64a" },
+  { min: 51, max: 100, label: "Satisfactory", color: "#87c91b" },
+  { min: 101, max: 200, label: "Moderate", color: "#f2ce22" },
+  { min: 201, max: 300, label: "Poor", color: "#f19019" },
+  { min: 301, max: 400, label: "Very Poor", color: "#e44331" },
+  { min: 401, max: 500, label: "Severe", color: "#971f43" },
 ];
 
 const POLLUTANT_LABELS: Record<PollutantKey, string> = {

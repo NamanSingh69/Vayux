@@ -2,10 +2,11 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
-import { type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
+import { type CanvasSource, type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
 import gsap from "gsap";
-import type { AqiApiResponse, StationProperties } from "@/lib/aqi/types";
+import type { AqiApiResponse, StationProperties, SurfaceFeatureCollection } from "@/lib/aqi/types";
 import { CPCB_AQI_SCALE, getAqiColor } from "@/lib/aqi/cpcb";
+import { NCR_INTERPOLATION_BBOX } from "@/lib/aqi/config";
 import { AqiLegend } from "./aqi-legend";
 import { MapStatus } from "./map-status";
 import { PolicySandbox } from "./policy-sandbox";
@@ -16,32 +17,69 @@ const EMPTY_GEOJSON = { type: "FeatureCollection" as const, features: [] };
 const REFRESH_MS = 12 * 60 * 1000;
 const SURFACE_SOURCE = "aqi-surface";
 const STATIONS_SOURCE = "aqi-stations";
-const SURFACE_LAYER = "aqi-surface-heat";
-const SURFACE_COLOR_LAYER = "aqi-surface-color";
+const SURFACE_LAYER = "aqi-surface-bands";
 const STATIONS_LAYER = "aqi-stations-circle";
 const STATIONS_HIT_LAYER = "aqi-stations-hit";
+const NCR_BOUNDS: maplibregl.LngLatBoundsLike = [[75.8, 27], [78.4, 30]];
+const INITIAL_VIEW_BOUNDS: maplibregl.LngLatBoundsLike = [[76.55, 27.95], [77.85, 29.08]];
+const COMPACT_LAYOUT_QUERY = "(max-width: 820px), (max-height: 560px)";
+const SURFACE_CANVAS_WIDTH = 512;
+const SURFACE_CANVAS_HEIGHT = 688;
+const [SURFACE_WEST, SURFACE_SOUTH, SURFACE_EAST, SURFACE_NORTH] = NCR_INTERPOLATION_BBOX;
+const SURFACE_COORDINATES: [[number, number], [number, number], [number, number], [number, number]] = [
+  [SURFACE_WEST, SURFACE_NORTH],
+  [SURFACE_EAST, SURFACE_NORTH],
+  [SURFACE_EAST, SURFACE_SOUTH],
+  [SURFACE_WEST, SURFACE_SOUTH],
+];
 
 const CIRCLE_COLOR_STOPS = CPCB_AQI_SCALE.flatMap((item) => [item.min, item.color]);
 
+type ActivePanel = "overview" | "policy" | null;
+
 export function DelhiAqiMap() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const surfaceCanvasRef = useRef<HTMLCanvasElement>(null);
+  const pageRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const overviewPanelRef = useRef<HTMLElement>(null);
+  const policyPanelRef = useRef<HTMLElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const activePanelRef = useRef<ActivePanel>(null);
+  const syncMapLayoutRef = useRef<() => void>(() => {});
   const dataRef = useRef<AqiApiResponse | null>(null);
   const [aqiData, setAqiData] = useState<AqiApiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<string>();
   const [stationQuery, setStationQuery] = useState("");
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
+  const [forecastAqi, setForecastAqi] = useState<number | null>(null);
+
+  const refreshSurface = useCallback((surfaceData: SurfaceFeatureCollection | null) => {
+    const canvas = surfaceCanvasRef.current;
+    const map = mapRef.current;
+    if (!canvas) return;
+
+    drawAqiSurface(canvas, surfaceData);
+    if (!map) return;
+
+    const surface = map.getSource(SURFACE_SOURCE) as CanvasSource | undefined;
+    surface?.play();
+    map.triggerRepaint();
+    if (surface) window.requestAnimationFrame(() => surface.pause());
+  }, []);
 
   const paintAqiData = useCallback((payload: AqiApiResponse | null) => {
+    refreshSurface(payload?.surface ?? null);
+
     const map = mapRef.current;
     if (!map) return;
 
-    const surface = map.getSource(SURFACE_SOURCE) as GeoJSONSource | undefined;
     const stations = map.getSource(STATIONS_SOURCE) as GeoJSONSource | undefined;
-    surface?.setData(payload?.surface ?? EMPTY_GEOJSON);
     stations?.setData(payload?.stations ?? EMPTY_GEOJSON);
-    if (surface && stations) map.triggerRepaint();
-  }, []);
+    if (stations) map.triggerRepaint();
+  }, [refreshSurface]);
 
   const loadAqi = useCallback(async () => {
     try {
@@ -67,6 +105,19 @@ export function DelhiAqiMap() {
   }, [paintAqiData]);
 
   useEffect(() => {
+    activePanelRef.current = activePanel;
+    syncMapLayoutRef.current();
+  }, [activePanel]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActivePanel(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const motionCleanups: Array<() => void> = [];
@@ -76,18 +127,63 @@ export function DelhiAqiMap() {
       container: containerRef.current,
       style: "https://tiles.openfreemap.org/styles/positron",
       center: [77.1, 28.5],
-      zoom: 8,
+      zoom: 7.4,
       pitch: 0,
       bearing: 0,
-      minZoom: 8,
+      minZoom: 7,
       maxZoom: 14,
-      maxBounds: [[75.8, 27], [78.4, 30]],
+      maxBounds: NCR_BOUNDS,
       renderWorldCopies: false,
       attributionControl: false,
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "top-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+
+    let layoutFrame = 0;
+    let hasFitInitialBounds = false;
+    const compactMedia = window.matchMedia(COMPACT_LAYOUT_QUERY);
+    const syncMapLayout = () => {
+      window.cancelAnimationFrame(layoutFrame);
+      layoutFrame = window.requestAnimationFrame(() => {
+        const compact = compactMedia.matches;
+        const headerHeight = headerRef.current?.offsetHeight ?? 0;
+        const dockHeight = dockRef.current?.offsetHeight ?? 0;
+        const activeElement = activePanelRef.current === "overview"
+          ? overviewPanelRef.current
+          : activePanelRef.current === "policy"
+            ? policyPanelRef.current
+            : null;
+        const activeSize = compact ? activeElement?.offsetHeight ?? 0 : activeElement?.offsetWidth ?? 0;
+        const padding: maplibregl.PaddingOptions = compact
+          ? {
+              top: headerHeight + 24,
+              right: 76,
+              bottom: dockHeight + activeSize + (activeElement ? 36 : 24),
+              left: 12,
+            }
+          : {
+              top: headerHeight + 32,
+              right: (activeElement ? activeSize + 116 : 96),
+              bottom: dockHeight + 32,
+              left: 24,
+            };
+
+        map.resize();
+        map.setMinZoom(compact ? 7 : 8);
+        map.setPadding(padding);
+        if (!hasFitInitialBounds && map.loaded()) {
+          map.fitBounds(INITIAL_VIEW_BOUNDS, { padding, maxZoom: compact ? 8.7 : 9.15, duration: 0 });
+          hasFitInitialBounds = true;
+        }
+      });
+    };
+    syncMapLayoutRef.current = syncMapLayout;
+
+    const resizeObserver = new ResizeObserver(syncMapLayout);
+    [pageRef.current, headerRef.current, dockRef.current, overviewPanelRef.current, policyPanelRef.current]
+      .forEach((element) => { if (element) resizeObserver.observe(element); });
+    compactMedia.addEventListener("change", syncMapLayout);
+    window.visualViewport?.addEventListener("resize", syncMapLayout);
 
     const controlGroup = containerRef.current.querySelector<HTMLElement>(".maplibregl-ctrl-group");
     if (controlGroup && !prefersReducedMotion) {
@@ -122,43 +218,27 @@ export function DelhiAqiMap() {
     const setupMapLayers = () => {
       if (map.getSource(SURFACE_SOURCE)) return;
       const initialData = dataRef.current;
-      map.addSource(SURFACE_SOURCE, { type: "geojson", data: initialData?.surface ?? EMPTY_GEOJSON });
+      const surfaceCanvas = surfaceCanvasRef.current;
+      if (!surfaceCanvas) return;
+
+      drawAqiSurface(surfaceCanvas, initialData?.surface ?? null);
+      map.addSource(SURFACE_SOURCE, {
+        type: "canvas",
+        canvas: surfaceCanvas,
+        coordinates: SURFACE_COORDINATES,
+        animate: false,
+      });
       map.addSource(STATIONS_SOURCE, { type: "geojson", data: initialData?.stations ?? EMPTY_GEOJSON });
 
       const firstLabelLayer = map.getStyle().layers?.find((layer: { type: string; id: string }) => layer.type === "symbol")?.id;
       map.addLayer({
         id: SURFACE_LAYER,
-        type: "heatmap",
+        type: "raster",
         source: SURFACE_SOURCE,
         paint: {
-          "heatmap-weight": ["interpolate", ["linear"], ["get", "aqi"], 0, 0, 500, 1],
-          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 8, 0.86, 10, 0.68, 12, 0.5],
-          "heatmap-color": [
-            "interpolate", ["linear"], ["heatmap-density"],
-            0, "rgba(52,168,83,0)",
-            0.04, CPCB_AQI_SCALE[0].color,
-            0.18, CPCB_AQI_SCALE[1].color,
-            0.34, CPCB_AQI_SCALE[2].color,
-            0.52, CPCB_AQI_SCALE[3].color,
-            0.72, CPCB_AQI_SCALE[4].color,
-            1, CPCB_AQI_SCALE[5].color,
-          ],
-          "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 26, 10, 84, 12, 280, 14, 500],
-          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.2, 12, 0.18, 14, 0.16],
-        },
-      }, firstLabelLayer);
-
-      map.addLayer({
-        id: SURFACE_COLOR_LAYER,
-        type: "circle",
-        source: SURFACE_SOURCE,
-        paint: {
-          // Radius follows the screen-space size of the 4 km IDW grid. The
-          // overlap and full blur make one continuous field rather than dots.
-          "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 22, 10, 82, 12, 310, 14, 980],
-          "circle-color": ["interpolate", ["linear"], ["get", "aqi"], ...CIRCLE_COLOR_STOPS],
-          "circle-blur": 1,
-          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.46, 12, 0.43, 14, 0.4],
+          "raster-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.92, 11, 0.88, 14, 0.84],
+          "raster-resampling": "linear",
+          "raster-fade-duration": 0,
         },
       }, firstLabelLayer);
 
@@ -195,7 +275,7 @@ export function DelhiAqiMap() {
       });
 
       paintAqiData(dataRef.current);
-
+      syncMapLayout();
     };
     map.on("style.load", setupMapLayers);
     map.once("load", setupMapLayers);
@@ -205,6 +285,11 @@ export function DelhiAqiMap() {
       motionCleanups.forEach((cleanup) => cleanup());
       const controls = containerRef.current?.querySelectorAll(".maplibregl-ctrl-group, .maplibregl-ctrl-group button");
       if (controls) gsap.killTweensOf(controls);
+      resizeObserver.disconnect();
+      compactMedia.removeEventListener("change", syncMapLayout);
+      window.visualViewport?.removeEventListener("resize", syncMapLayout);
+      window.cancelAnimationFrame(layoutFrame);
+      syncMapLayoutRef.current = () => {};
       map.remove();
       mapRef.current = null;
     };
@@ -224,7 +309,8 @@ export function DelhiAqiMap() {
   }, [loadAqi]);
 
   const handleForecastChange = useCallback(
-    (_hour: number, multiplier: number) => {
+    (_hour: number, multiplier: number, nextAqi: number) => {
+      setForecastAqi(nextAqi);
       if (!dataRef.current || !mapRef.current) return;
       const baseData = dataRef.current;
 
@@ -239,10 +325,9 @@ export function DelhiAqiMap() {
         })),
       };
 
-      const surfaceSource = mapRef.current.getSource(SURFACE_SOURCE) as GeoJSONSource | undefined;
-      surfaceSource?.setData(modulatedSurface);
+      refreshSurface(modulatedSurface);
     },
-    []
+    [refreshSurface]
   );
 
   const metrics = useMemo(() => deriveMetrics(aqiData), [aqiData]);
@@ -277,13 +362,21 @@ export function DelhiAqiMap() {
   }, [aqiData, stationQuery]);
 
   return (
-    <main className={styles.mapPage}>
+    <main ref={pageRef} className={styles.mapPage}>
       <div ref={containerRef} className={styles.map} aria-label="Interactive Delhi NCR air quality map" />
-      <div className={styles.mapVeil} aria-hidden="true" />
-      <MapStatus state={state} updatedAt={updatedAt} metrics={metrics} />
-      <section className={styles.commandPanel} aria-label="Delhi NCR command center">
+      <canvas
+        ref={surfaceCanvasRef}
+        className={styles.surfaceCanvas}
+        width={SURFACE_CANVAS_WIDTH}
+        height={SURFACE_CANVAS_HEIGHT}
+        aria-hidden="true"
+      />
+      <div className={styles.mapReadability} aria-hidden="true" />
+
+      <header ref={headerRef} className={styles.topBar}>
+        <MapStatus state={state} updatedAt={updatedAt} metrics={metrics} />
         <form className={styles.searchShell} onSubmit={(event) => { event.preventDefault(); handleStationSearch(); }}>
-          <span aria-hidden="true">⌕</span>
+          <span className={styles.searchIcon} aria-hidden="true">⌕</span>
           <input
             type="search"
             placeholder="Search CPCB station..."
@@ -297,6 +390,58 @@ export function DelhiAqiMap() {
           </datalist>
           <button type="submit" aria-label="Go to station">Go</button>
         </form>
+      </header>
+
+      <nav className={styles.actionRail} aria-label="Map tools">
+        <button
+          type="button"
+          className={activePanel === "overview" ? styles.actionActive : ""}
+          aria-controls="aqi-overview-panel"
+          aria-expanded={activePanel === "overview"}
+          onClick={() => setActivePanel((current) => current === "overview" ? null : "overview")}
+        >
+          <span aria-hidden="true">◉</span>
+          <small>AQI</small>
+        </button>
+        <button
+          type="button"
+          className={activePanel === "policy" ? styles.actionActive : ""}
+          aria-controls="policy-panel"
+          aria-expanded={activePanel === "policy"}
+          onClick={() => setActivePanel((current) => current === "policy" ? null : "policy")}
+        >
+          <span aria-hidden="true">∫</span>
+          <small>Policy</small>
+        </button>
+      </nav>
+
+      <button
+        type="button"
+        className={`${styles.panelScrim} ${activePanel ? styles.scrimOpen : ""}`}
+        aria-label="Close open map panel"
+        tabIndex={activePanel ? 0 : -1}
+        onClick={() => setActivePanel(null)}
+      />
+
+      <section
+        ref={overviewPanelRef}
+        id="aqi-overview-panel"
+        className={`${styles.detailPanel} ${styles.overviewPanel} ${activePanel === "overview" ? styles.panelOpen : ""}`}
+        aria-label="Delhi NCR air quality overview"
+        aria-hidden={activePanel !== "overview"}
+        inert={activePanel !== "overview"}
+      >
+        <div className={styles.sheetHandle} aria-hidden="true" />
+        <div className={styles.detailHeader}>
+          <div className={styles.detailTitle}>
+            <span className={styles.detailHeaderIcon} aria-hidden="true">◉</span>
+            <div>
+              <span className={styles.eyebrow}>Live Air Quality</span>
+              <h2>Delhi NCR</h2>
+            </div>
+          </div>
+          <button type="button" className={styles.closeButton} onClick={() => setActivePanel(null)} aria-label="Close AQI overview">×</button>
+        </div>
 
         <div className={styles.regionCard}>
           <div>
@@ -338,9 +483,31 @@ export function DelhiAqiMap() {
           </div>
         </div>
       </section>
-      <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
-      <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
-      <AqiLegend />
+
+      <section
+        ref={policyPanelRef}
+        id="policy-panel"
+        className={`${styles.detailPanel} ${styles.policyPanel} ${activePanel === "policy" ? styles.panelOpen : ""}`}
+        aria-label="Policy mitigation tools"
+        aria-hidden={activePanel !== "policy"}
+        inert={activePanel !== "policy"}
+      >
+        <div className={styles.sheetHandle} aria-hidden="true" />
+        <button type="button" className={styles.closeButton} onClick={() => setActivePanel(null)} aria-label="Close policy tools">×</button>
+        <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
+      </section>
+
+      <div ref={dockRef} className={styles.bottomDock}>
+        <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
+        <AqiLegend activeAqi={forecastAqi ?? metrics.regionalAqi ?? 0} />
+        <div className={styles.mapAttribution}>
+          <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>
+          <span>·</span>
+          <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">© OpenMapTiles</a>
+          <span>· Data from </span>
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+        </div>
+      </div>
     </main>
   );
 }
@@ -354,6 +521,134 @@ interface DashboardMetrics {
   stationCount: number;
   dominantPollutant: string;
   dominantShare: string;
+}
+
+interface SurfaceColorStop {
+  aqi: number;
+  rgb: readonly [number, number, number];
+}
+
+const SURFACE_COLOR_STOPS: readonly SurfaceColorStop[] = [
+  { aqi: 0, rgb: hexToRgb(CPCB_AQI_SCALE[0].color) },
+  ...CPCB_AQI_SCALE.map((item) => ({
+    aqi: (item.min + item.max) / 2,
+    rgb: hexToRgb(item.color),
+  })),
+  { aqi: 500, rgb: hexToRgb(CPCB_AQI_SCALE[CPCB_AQI_SCALE.length - 1].color) },
+];
+
+function drawAqiSurface(canvas: HTMLCanvasElement, surface: SurfaceFeatureCollection | null) {
+  const context = canvas.getContext("2d", { alpha: true });
+  if (!context) return;
+
+  const features = surface?.features ?? [];
+  if (!features.length) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  const longitudes = Array.from(new Set(features.map((feature) => feature.geometry.coordinates[0])))
+    .sort((a, b) => a - b);
+  const latitudes = Array.from(new Set(features.map((feature) => feature.geometry.coordinates[1])))
+    .sort((a, b) => a - b);
+  if (longitudes.length < 2 || latitudes.length < 2) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  const longitudeIndex = new Map(longitudes.map((value, index) => [value, index]));
+  const latitudeIndex = new Map(latitudes.map((value, index) => [value, index]));
+  const samples = new Float32Array(longitudes.length * latitudes.length);
+  samples.fill(Number.NaN);
+  features.forEach((feature) => {
+    const [longitude, latitude] = feature.geometry.coordinates;
+    const x = longitudeIndex.get(longitude);
+    const y = latitudeIndex.get(latitude);
+    if (x !== undefined && y !== undefined) samples[y * longitudes.length + x] = feature.properties.aqi;
+  });
+
+  const image = context.createImageData(canvas.width, canvas.height);
+  const maxSampleX = longitudes.length - 1;
+  const maxSampleY = latitudes.length - 1;
+  for (let pixelY = 0; pixelY < canvas.height; pixelY += 1) {
+    const sampleY = (1 - pixelY / (canvas.height - 1)) * maxSampleY;
+    const y0 = Math.floor(sampleY);
+    const y1 = Math.min(y0 + 1, maxSampleY);
+    const yWeight = sampleY - y0;
+
+    for (let pixelX = 0; pixelX < canvas.width; pixelX += 1) {
+      const sampleX = (pixelX / (canvas.width - 1)) * maxSampleX;
+      const x0 = Math.floor(sampleX);
+      const x1 = Math.min(x0 + 1, maxSampleX);
+      const xWeight = sampleX - x0;
+      const aqi = bilinearSample(samples, longitudes.length, x0, x1, y0, y1, xWeight, yWeight);
+      const [red, green, blue] = interpolateSurfaceColor(aqi);
+      const offset = (pixelY * canvas.width + pixelX) * 4;
+      image.data[offset] = red;
+      image.data[offset + 1] = green;
+      image.data[offset + 2] = blue;
+      image.data[offset + 3] = 255;
+    }
+  }
+  context.putImageData(image, 0, 0);
+}
+
+function bilinearSample(
+  samples: Float32Array,
+  rowWidth: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  xWeight: number,
+  yWeight: number,
+): number {
+  const topLeft = samples[y0 * rowWidth + x0];
+  const topRight = samples[y0 * rowWidth + x1];
+  const bottomLeft = samples[y1 * rowWidth + x0];
+  const bottomRight = samples[y1 * rowWidth + x1];
+  const topLeftWeight = (1 - xWeight) * (1 - yWeight);
+  const topRightWeight = xWeight * (1 - yWeight);
+  const bottomLeftWeight = (1 - xWeight) * yWeight;
+  const bottomRightWeight = xWeight * yWeight;
+  let weightedValue = 0;
+  let totalWeight = 0;
+
+  if (Number.isFinite(topLeft)) {
+    weightedValue += topLeft * topLeftWeight;
+    totalWeight += topLeftWeight;
+  }
+  if (Number.isFinite(topRight)) {
+    weightedValue += topRight * topRightWeight;
+    totalWeight += topRightWeight;
+  }
+  if (Number.isFinite(bottomLeft)) {
+    weightedValue += bottomLeft * bottomLeftWeight;
+    totalWeight += bottomLeftWeight;
+  }
+  if (Number.isFinite(bottomRight)) {
+    weightedValue += bottomRight * bottomRightWeight;
+    totalWeight += bottomRightWeight;
+  }
+  return totalWeight ? weightedValue / totalWeight : 0;
+}
+
+function interpolateSurfaceColor(aqi: number): readonly [number, number, number] {
+  const value = Math.max(0, Math.min(500, aqi));
+  const upperIndex = SURFACE_COLOR_STOPS.findIndex((stop) => value <= stop.aqi);
+  if (upperIndex <= 0) return SURFACE_COLOR_STOPS[0].rgb;
+  const lower = SURFACE_COLOR_STOPS[upperIndex - 1];
+  const upper = SURFACE_COLOR_STOPS[upperIndex];
+  const progress = (value - lower.aqi) / Math.max(upper.aqi - lower.aqi, 1);
+  const eased = progress * progress * (3 - 2 * progress);
+  return lower.rgb.map((channel, index) => Math.round(
+    channel + (upper.rgb[index] - channel) * eased,
+  )) as unknown as readonly [number, number, number];
+}
+
+function hexToRgb(color: string): readonly [number, number, number] {
+  const value = Number.parseInt(color.slice(1), 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }
 
 function deriveMetrics(payload: AqiApiResponse | null): DashboardMetrics {
