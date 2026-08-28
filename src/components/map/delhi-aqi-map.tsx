@@ -5,7 +5,15 @@ import * as maplibregl from "maplibre-gl";
 import { type GeoJSONSource, type MapLayerMouseEvent } from "maplibre-gl";
 import gsap from "gsap";
 import type { AqiApiResponse, StationProperties } from "@/lib/aqi/types";
-import { CPCB_AQI_SCALE, getAqiColor } from "@/lib/aqi/cpcb";
+import {
+  CPCB_AQI_SCALE,
+  getAqiColor,
+  getLayerColor,
+  getLayerColorStops,
+  getLayerHeatmapConfig,
+  formatStationLayerBadge,
+  type MapLayerKey,
+} from "@/lib/aqi/cpcb";
 import { AqiLegend } from "./aqi-legend";
 import { MapStatus } from "./map-status";
 import { PolicySandbox } from "./policy-sandbox";
@@ -34,7 +42,45 @@ export function DelhiAqiMap() {
   const [selectedStation, setSelectedStation] = useState<StationProperties | null>(null);
   const [stationQuery, setStationQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [activeLayer, setActiveLayer] = useState<MapLayerKey>("AQI");
+  const [showLayerMenu, setShowLayerMenu] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const updateLayerStyles = useCallback((layer: MapLayerKey) => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const cfg = getLayerHeatmapConfig(layer);
+    const colorStops = getLayerColorStops(layer);
+
+    if (map.getLayer(SURFACE_LAYER)) {
+      map.setPaintProperty(SURFACE_LAYER, "heatmap-weight", [
+        "interpolate", ["linear"], ["coalesce", ["get", cfg.property], cfg.weightMin],
+        cfg.weightMin, 0,
+        cfg.weightMax, 1,
+      ]);
+      map.setPaintProperty(SURFACE_LAYER, "heatmap-color", [
+        "interpolate", ["linear"], ["heatmap-density"],
+        ...cfg.colorStops,
+      ]);
+    }
+
+    if (map.getLayer(SURFACE_COLOR_LAYER)) {
+      map.setPaintProperty(SURFACE_COLOR_LAYER, "circle-color", [
+        "interpolate", ["linear"], ["coalesce", ["get", cfg.property], cfg.weightMin],
+        ...colorStops,
+      ]);
+    }
+
+    if (map.getLayer(STATIONS_LAYER)) {
+      map.setPaintProperty(STATIONS_LAYER, "circle-color", [
+        "interpolate", ["linear"], ["coalesce", ["get", cfg.property], cfg.weightMin],
+        ...colorStops,
+      ]);
+    }
+
+    map.triggerRepaint();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -235,6 +281,7 @@ export function DelhiAqiMap() {
       if (dataRef.current) {
         paintAqiData(dataRef.current);
       }
+      updateLayerStyles(activeLayer);
     };
     map.on("style.load", setupMapLayers);
     map.once("load", setupMapLayers);
@@ -247,7 +294,11 @@ export function DelhiAqiMap() {
       map.remove();
       mapRef.current = null;
     };
-  }, [paintAqiData]);
+  }, [paintAqiData, activeLayer, updateLayerStyles]);
+
+  useEffect(() => {
+    updateLayerStyles(activeLayer);
+  }, [activeLayer, updateLayerStyles]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -274,6 +325,8 @@ export function DelhiAqiMap() {
           properties: {
             ...f.properties,
             aqi: Math.min(Math.round((f.properties?.aqi ?? 200) * multiplier), 500),
+            pm25: Number(((f.properties?.pm25 ?? 30) * multiplier).toFixed(1)),
+            pm10: Number(((f.properties?.pm10 ?? 80) * multiplier).toFixed(1)),
           },
         })),
       };
@@ -296,9 +349,6 @@ export function DelhiAqiMap() {
     if (!needle) return stationOptions.length;
     return stationOptions.filter((station) => station.toLowerCase().includes(needle)).length;
   }, [stationOptions, stationQuery]);
-
-  const [activeLayer, setActiveLayer] = useState<"AQI" | "PM2.5" | "PM10" | "Temperature" | "Humidity">("AQI");
-  const [showLayerMenu, setShowLayerMenu] = useState(false);
 
   const filteredStations = useMemo(() => {
     const needle = stationQuery.trim().toLowerCase();
@@ -367,26 +417,36 @@ export function DelhiAqiMap() {
 
           {showDropdown && filteredStations.length > 0 && (
             <div className={styles.searchDropdown} role="listbox">
-              {filteredStations.slice(0, 30).map((f) => (
-                <div
-                  key={f.properties.station}
-                  className={styles.searchItem}
-                  role="option"
-                  aria-selected={stationQuery === f.properties.station}
-                  onClick={() => selectStation(f.properties.station)}
-                >
-                  <span>{f.properties.station}</span>
-                  <span
-                    className={styles.searchItemBadge}
-                    style={{
-                      backgroundColor: getAqiColor(f.properties.aqi),
-                      color: f.properties.aqi > 200 ? "#ffffff" : "#000000",
-                    }}
+              {filteredStations.slice(0, 30).map((f) => {
+                const badgeInfo = formatStationLayerBadge(activeLayer, f.properties);
+                const isLightText =
+                  (activeLayer === "AQI" && f.properties.aqi > 200) ||
+                  (activeLayer === "PM2.5" && (f.properties.pm25 ?? 0) > 120) ||
+                  (activeLayer === "PM10" && (f.properties.pm10 ?? 0) > 250) ||
+                  (activeLayer === "Temperature" && (f.properties.temperature ?? 0) > 36) ||
+                  (activeLayer === "Humidity" && (f.properties.humidity ?? 0) > 80);
+
+                return (
+                  <div
+                    key={f.properties.station}
+                    className={styles.searchItem}
+                    role="option"
+                    aria-selected={stationQuery === f.properties.station}
+                    onClick={() => selectStation(f.properties.station)}
                   >
-                    AQI {f.properties.aqi}
-                  </span>
-                </div>
-              ))}
+                    <span>{f.properties.station}</span>
+                    <span
+                      className={styles.searchItemBadge}
+                      style={{
+                        backgroundColor: badgeInfo.color,
+                        color: isLightText ? "#ffffff" : "#000000",
+                      }}
+                    >
+                      {badgeInfo.badge}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -459,7 +519,7 @@ export function DelhiAqiMap() {
       <StationDetailDrawer station={selectedStation} onClose={() => setSelectedStation(null)} />
       <PolicySandbox baselineAqi={metrics.regionalAqi ?? 235} />
       <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 235} />
-      <AqiLegend />
+      <AqiLegend activeLayer={activeLayer} />
     </main>
   );
 }

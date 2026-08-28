@@ -1,31 +1,41 @@
 import { NextResponse } from "next/server";
+import { simulatePolicyImpact } from "@/lib/aqi/policy";
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+  const body = await request.json().catch(() => ({}));
+  const backendUrl = process.env.BACKEND_API_URL || "http://127.0.0.1:8000";
 
-    const response = await fetch("https://vayux.onrender.com/api/v1/policy/simulate", {
+  try {
+    const response = await fetch(`${backendUrl}/api/v1/policy/simulate`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_aqi: body.baseline_aqi ?? 340,
+        baseline_pm25: body.baseline_pm25 ?? 260.0,
+        vehicular: body.vehicular ?? 1.0,
+        stubble: body.stubble ?? 1.0,
+        industrial: body.industrial ?? 1.0,
+        dust: body.dust ?? 1.0,
+      }),
+      signal: AbortSignal.timeout(3000),
     });
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `Backend returned ${response.status}` },
-        { status: response.status }
-      );
+    if (response.ok) {
+      const data = await response.json();
+      return NextResponse.json(data);
     }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("Proxy error calling Render backend:", error);
-    return NextResponse.json(
-      { error: "Failed to connect to atmospheric physics engine" },
-      { status: 500 }
-    );
+  } catch {
+    // Fallback to local atmospheric mass-balance calculation
   }
+
+  const result = simulatePolicyImpact({
+    baseline_aqi: body.baseline_aqi ?? 340,
+    baseline_pm25: body.baseline_pm25 ?? 260.0,
+    vehicular: body.vehicular ?? 1.0,
+    stubble: body.stubble ?? 1.0,
+    industrial: body.industrial ?? 1.0,
+    dust: body.dust ?? 1.0,
+  });
+
+  return NextResponse.json(result);
 }

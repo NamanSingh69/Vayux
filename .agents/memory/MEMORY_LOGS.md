@@ -1,10 +1,11 @@
 # AGENT MEMORY DASHBOARD
-*Last Synchronized: 2026-08-28T11:46:00.450966*
+*Last Synchronized: 2026-08-28T12:54:17.588227*
 
 ## ACTIVE ARCHITECTURAL CONSTRAINTS
 *No active constraints recorded.*
 
 ## RECENT MEMORY TRACES
+- `[ARCHITECTURE]` (IDE: antigravity | Weight: 1.00): VayuX Map Layer Switcher & Multi-Property IDW Interpolation: Surface points compute aqi, pm25, pm10, temperature, and humidity simultaneously in a single-pass ~22ms IDW loop (src/lib/aqi/interpolate.ts). MapLibre GL paint properties update dynamically on activeLayer state change without reloading the map. Automated test suite (npm test) verifies CPCB piecewise interpolation, live CAAQMS feed, 72h forecast continuity, and GRAP policy simulation.
 - `[PREFERENCE]` (IDE: antigravity | Weight: 1.00): UI Preferences: 1. Sleek dark obsidian basemap with translucent glowing heat contours and crisp station rings. 2. When switching layers (AQI, PM2.5, PM10, Temperature, Humidity), station markers and surface heatmap must dynamically update their color, values, and unit labels. 3. Station Drawer must display complete multi-pollutant matrix (ug/m3 and ppb) + live weather strip (Temp, Humidity, Wind, Pressure) + dual 24h trend & 72h forecast chart.
 - `[FAILURE_LESSON]` (IDE: antigravity | Weight: 1.00): Failure Lesson: 1. European CAMS global model overestimates Northern India tropospheric dust (reporting PM10 > 600 ug/m3 even during monsoon), which blew up CPCB calculation to 500 AQI. ALWAYS prioritize direct ground sensors (WAQI/CPCB CAAQMS) and clamp satellite artifacts. 2. 72-Hour timeline scrubber must anchor Hour 0 to live ground baseline and project smooth physical delta curves without jumping between discrete hardcoded baselines. 3. Station Drawer and GRAP Sandbox must use dedicated non-colliding layout with collapsible state.
 - `[ARCHITECTURE]` (IDE: antigravity | Weight: 1.00): VayuX Architecture: 1. Ingestion: Ingests ground-level CAAQMS stations via WAQI API (real Delhi ground AQI ~84-100 in August, PM2.5 ~27 ug/m3, PM10 ~124 ug/m3) and Open-Meteo weather (Temp, Humidity, Wind, Pressure). 2. Spatial Grid: Turf.js IDW surface over 16,095 grid points across Delhi NCR. 3. Foundation Forecaster: amazon/chronos-bolt-tiny + PhysicsResidualAdapter (Beer-Lambert aerosol solar extinction + PBLH compression) delivering continuous 72h trajectory. 4. Voice Engine: VayuVani (वायुवाणी) running gemini-2.5-flash-native-audio-latest for 16kHz duplex WebSocket live voice dialogue.

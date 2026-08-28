@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "npx tsx tests/run_all.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },

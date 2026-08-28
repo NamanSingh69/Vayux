@@ -2,10 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
-import { CPCB_AQI_SCALE } from "@/lib/aqi/cpcb";
+import { getLayerScale, type MapLayerKey } from "@/lib/aqi/cpcb";
 import styles from "./map.module.css";
 
-export function AqiLegend() {
+interface AqiLegendProps {
+  activeLayer?: MapLayerKey;
+}
+
+export function AqiLegend({ activeLayer = "AQI" }: AqiLegendProps) {
   const legendRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -36,14 +40,49 @@ export function AqiLegend() {
     };
   }, []);
 
+  const scale = getLayerScale(activeLayer);
+
+  const getLegendLabels = () => {
+    switch (activeLayer) {
+      case "AQI":
+        return { left: "Good", right: "Severe (AQI)", title: "National Air Quality Index Scale" };
+      case "PM2.5":
+        return { left: "0 µg/m³ (Good)", right: "350+ µg/m³ (Severe)", title: "PM2.5 Particulate Concentration" };
+      case "PM10":
+        return { left: "0 µg/m³ (Good)", right: "600+ µg/m³ (Severe)", title: "PM10 Coarse Particulate Concentration" };
+      case "Temperature":
+        return { left: "15°C (Cool)", right: "48°C+ (Extreme)", title: "Surface Ambient Temperature" };
+      case "Humidity":
+        return { left: "10% (Dry)", right: "100% (Saturated)", title: "Relative Humidity" };
+    }
+  };
+
+  const getLegendTicks = () => {
+    switch (activeLayer) {
+      case "AQI":
+        return ["0", "51", "101", "201", "301", "401", "500"];
+      case "PM2.5":
+        return ["0", "30", "60", "90", "120", "250", "350"];
+      case "PM10":
+        return ["0", "50", "100", "250", "350", "430", "600"];
+      case "Temperature":
+        return ["15°", "24°", "30°", "36°", "42°", "48°", "55°"];
+      case "Humidity":
+        return ["10%", "30%", "50%", "70%", "85%", "95%", "100%"];
+    }
+  };
+
+  const labels = getLegendLabels();
+  const ticks = getLegendTicks();
+
   return (
-    <aside ref={legendRef} className={styles.legend} aria-label="Indian AQI scale">
+    <aside ref={legendRef} className={styles.legend} aria-label={`${activeLayer} scale`}>
       <div className={styles.legendLabels}>
-        <span>Good</span>
-        <span>Severe</span>
+        <span>{labels.left}</span>
+        <span>{labels.right}</span>
       </div>
       <div className={styles.gradient}>
-        {CPCB_AQI_SCALE.map((item) => (
+        {scale.map((item) => (
           <span
             key={item.label}
             style={{ backgroundColor: item.color }}
@@ -52,13 +91,9 @@ export function AqiLegend() {
         ))}
       </div>
       <div className={styles.legendTicks} aria-hidden="true">
-        <span>0</span>
-        <span>51</span>
-        <span>101</span>
-        <span>201</span>
-        <span>301</span>
-        <span>401</span>
-        <span>500</span>
+        {ticks.map((tick, idx) => (
+          <span key={`${tick}-${idx}`}>{tick}</span>
+        ))}
       </div>
     </aside>
   );

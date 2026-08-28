@@ -45,8 +45,18 @@ export interface StationProperties {
   pressure?: number;
 }
 
+export type MapLayerKey = "AQI" | "PM2.5" | "PM10" | "Temperature" | "Humidity";
+
+export interface SurfaceProperties {
+  aqi: number;
+  pm25?: number;
+  pm10?: number;
+  temperature?: number;
+  humidity?: number;
+}
+
 export type StationFeatureCollection = FeatureCollection<Point, StationProperties>;
-export type SurfaceFeatureCollection = FeatureCollection<Point, { aqi: number }>;
+export type SurfaceFeatureCollection = FeatureCollection<Point, SurfaceProperties>;
 
 export interface AqiApiResponse {
   updatedAt: string;
