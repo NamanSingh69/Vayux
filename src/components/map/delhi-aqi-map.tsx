@@ -11,6 +11,7 @@ import { MapStatus } from "./map-status";
 import { PolicySandbox } from "./policy-sandbox";
 import styles from "./map.module.css";
 import { ForecastTimeline } from "./forecast-timeline";
+import { StationDetailDrawer } from "./station-detail-drawer";
 
 const EMPTY_GEOJSON = { type: "FeatureCollection" as const, features: [] };
 const REFRESH_MS = 12 * 60 * 1000;
@@ -30,6 +31,7 @@ export function DelhiAqiMap() {
   const [aqiData, setAqiData] = useState<AqiApiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<string>();
+  const [selectedStation, setSelectedStation] = useState<StationProperties | null>(null);
   const [stationQuery, setStationQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -55,15 +57,10 @@ export function DelhiAqiMap() {
 
     setStationQuery(match.properties.station);
     setShowDropdown(false);
+    setSelectedStation(match.properties);
 
     const coordinates = match.geometry.coordinates as [number, number];
     map.flyTo({ center: coordinates, zoom: Math.max(map.getZoom(), 12.5), duration: 750, essential: true });
-    openStationPopup(
-      map,
-      coordinates,
-      match.properties,
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    );
   }, [aqiData]);
 
   const handleStationSearch = useCallback(() => {
@@ -96,7 +93,6 @@ export function DelhiAqiMap() {
       setUpdatedAt(payload.updatedAt);
       setState("ready");
     } catch (error) {
-      // The map remains usable when the hourly government feed is unavailable.
       console.warn("Unable to fetch Delhi NCR AQI map data", error);
       dataRef.current = null;
       setAqiData(null);
@@ -113,7 +109,7 @@ export function DelhiAqiMap() {
     maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://tiles.openfreemap.org/styles/positron",
+      style: "https://tiles.openfreemap.org/styles/dark",
       center: [77.1, 28.5],
       zoom: 8,
       pitch: 0,
@@ -232,7 +228,8 @@ export function DelhiAqiMap() {
         const feature = event.features?.[0];
         if (!feature || feature.geometry.type !== "Point") return;
         const props = feature.properties as StationProperties;
-        openStationPopup(map, feature.geometry.coordinates as [number, number], props, prefersReducedMotion);
+        setSelectedStation(props);
+        setStationQuery(props.station);
       });
 
       if (dataRef.current) {
@@ -428,6 +425,7 @@ export function DelhiAqiMap() {
           </div>
         </div>
       </section>
+      <StationDetailDrawer station={selectedStation} onClose={() => setSelectedStation(null)} />
       <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
       <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
       <AqiLegend />

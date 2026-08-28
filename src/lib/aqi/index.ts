@@ -16,6 +16,12 @@ export async function getNcrAqi(): Promise<AqiApiResponse> {
       category: reading.category,
       dominantPollutant: reading.dominantPollutant,
       updatedAt: reading.updatedAt,
+      pm25: reading.pollutants.pm25,
+      pm10: reading.pollutants.pm10,
+      no2: reading.pollutants.no2,
+      so2: reading.pollutants.so2,
+      co: reading.pollutants.co,
+      o3: reading.pollutants.o3,
     },
   }));
   const stations: StationFeatureCollection = { type: "FeatureCollection", features };
