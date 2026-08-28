@@ -1,61 +1,26 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useJarvisVoice } from '@/hooks/useJarvisVoice';
 import styles from './jarvis-voice.module.css';
 
 export default function JarvisVoiceWidget() {
-  const [showPill, setShowPill] = useState(false);
-  const { isConnected, isRecording, isSpeaking, transcript, activeVoiceModel, activeReasoningModel, startListening, stopListening } = useJarvisVoice();
+  const { isRecording, isSpeaking, startListening, stopListening } = useJarvisVoice();
 
   // Determine current interaction state
   const state = isSpeaking ? 'speaking' : isRecording ? 'listening' : 'idle';
-
-  useEffect(() => {
-    if (transcript || isSpeaking) {
-      setShowPill(true);
-    }
-  }, [transcript, isSpeaking]);
 
   const handleToggle = () => {
     if (isRecording) {
       stopListening();
     } else {
       startListening();
-      setShowPill(true);
     }
   };
 
   return (
     <div className={styles.voiceWidget} role="region" aria-label="VayuVani Voice Co-Pilot">
-      {/* Sleek Minimal Floating Speech Pill - Appears organically when active */}
-      {showPill && (isRecording || isSpeaking || transcript) && (
-        <div className={styles.transcriptOverlay} role="status" aria-live="polite">
-          <div className={styles.transcriptHeader}>
-            <span className={styles.assistantTag}>
-              <span className={styles.statusIndicator} />
-              VayuVani · {isSpeaking ? 'Responding' : isRecording ? 'Listening' : 'Ready'}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowPill(false)}
-              style={{ background: 'none', border: 'none', color: 'inherit', opacity: 0.5, cursor: 'pointer', fontSize: '13px' }}
-              aria-label="Dismiss transcript"
-            >
-              ✕
-            </button>
-          </div>
-          <div className={styles.transcriptText}>
-            {transcript || (
-              <span style={{ opacity: 0.6, fontStyle: 'italic' }}>
-                Ask anything: &ldquo;Live weather in Delhi&rdquo;, &ldquo;Active stubble fires&rdquo;, or &ldquo;Simulate GRAP Stage 4&rdquo;
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Fluid Glowing Voice Orb */}
+      {/* Fluid Glowing Voice Orb - Enlarages on click and glows/flows organically */}
       <button
         type="button"
         className={styles.orbButton}
@@ -69,7 +34,7 @@ export default function JarvisVoiceWidget() {
           <div className={`${styles.fluidWave} ${styles.wave1}`} aria-hidden="true" />
           <div className={`${styles.fluidWave} ${styles.wave2}`} aria-hidden="true" />
 
-          {/* Soundwave / Mic Icon */}
+          {/* Dynamic Mic / Soundwave Icon */}
           <svg className={styles.micIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {isSpeaking ? (
               <>

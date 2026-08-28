@@ -6,7 +6,7 @@ interface UseJarvisVoiceOptions {
 }
 
 export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
-  const wsUrl = options.wsUrl || process.env.NEXT_PUBLIC_WS_URL || "wss://vayux.onrender.com/ws/jarvis-live";
+  const wsUrl = options.wsUrl || process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/jarvis-live";
   
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -23,9 +23,9 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const audioQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef(false);
   const nextPlayTimeRef = useRef<number>(0);
+  const speakingTimeoutRef = useRef<number | null>(null);
 
   // Fetch best reasoning model for background cognitive tasks on mount
   useEffect(() => {
@@ -45,17 +45,12 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     loadBestModel();
   }, []);
 
-  const playNextAudioChunk = useCallback(async function playNext() {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsSpeaking(false);
-      return;
-    }
-
-    isPlayingRef.current = true;
-    setIsSpeaking(true);
-    const chunk = audioQueueRef.current.shift()!;
-
+  /**
+   * Pipelined Web Audio Scheduling
+   * Schedules incoming 24kHz PCM chunks seamlessly on the Web Audio hardware clock
+   * to eliminate cracks, pops, and stuttering.
+   */
+  const scheduleAudioChunk = useCallback((chunk: ArrayBuffer) => {
     if (!speakerContextRef.current) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       speakerContextRef.current = new AudioCtx({ sampleRate: 24000 });
@@ -63,9 +58,14 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
 
     const ctx = speakerContextRef.current;
     if (ctx.state === 'suspended') {
-      await ctx.resume();
+      ctx.resume();
     }
-    const pcmData = new Int16Array(chunk);
+
+    // Ensure strictly even byte length for 16-bit PCM to prevent alignment distortion
+    const validByteLength = chunk.byteLength - (chunk.byteLength % 2);
+    if (validByteLength < 4) return;
+
+    const pcmData = new Int16Array(chunk.slice(0, validByteLength));
     const audioBuffer = ctx.createBuffer(1, pcmData.length, 24000);
     const channelData = audioBuffer.getChannelData(0);
 
@@ -76,22 +76,27 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(ctx.destination);
-    
-    // Scheduled playback to eliminate jitter and audio pops
+
     const now = ctx.currentTime;
-    const startTime = Math.max(now, nextPlayTimeRef.current);
+    // Add a tiny 40ms initial jitter buffer on the first chunk so continuous chunks flow seamlessly
+    const startTime = nextPlayTimeRef.current > now ? nextPlayTimeRef.current : (now + 0.04);
     source.start(startTime);
     nextPlayTimeRef.current = startTime + audioBuffer.duration;
 
-    source.onended = () => {
-      if (audioQueueRef.current.length > 0) {
-        playNext();
-      } else {
-        isPlayingRef.current = false;
+    setIsSpeaking(true);
+    isPlayingRef.current = true;
+
+    if (speakingTimeoutRef.current) {
+      window.clearTimeout(speakingTimeoutRef.current);
+    }
+    const remainingMs = Math.max(50, (nextPlayTimeRef.current - now) * 1000 + 40);
+    speakingTimeoutRef.current = window.setTimeout(() => {
+      if (speakerContextRef.current && speakerContextRef.current.currentTime >= nextPlayTimeRef.current - 0.05) {
         setIsSpeaking(false);
+        isPlayingRef.current = false;
         nextPlayTimeRef.current = 0;
       }
-    };
+    }, remainingMs);
   }, []);
 
   const connect = useCallback(() => {
@@ -106,6 +111,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       setIsRecording(false);
       setIsSpeaking(false);
       isPlayingRef.current = false;
+      nextPlayTimeRef.current = 0;
     };
 
     ws.onmessage = (event) => {
@@ -123,15 +129,12 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
           // ignore non-json messages
         }
       } else if (event.data instanceof ArrayBuffer) {
-        audioQueueRef.current.push(event.data);
-        if (!isPlayingRef.current) {
-          playNextAudioChunk();
-        }
+        scheduleAudioChunk(event.data);
       }
     };
 
     wsRef.current = ws;
-  }, [wsUrl, options, playNextAudioChunk]);
+  }, [wsUrl, options, scheduleAudioChunk]);
 
   const startListening = async () => {
     connect();
@@ -162,7 +165,7 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
 
       processor.onaudioprocess = (e) => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-        // Echo Gating: Do not forward microphone feedback while assistant is outputting audio
+        // Echo Gating: Mute outgoing mic packets while assistant is speaking to prevent false interruption
         if (isPlayingRef.current) return;
 
         const inputData = e.inputBuffer.getChannelData(0);
@@ -193,6 +196,12 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     }
     
     setIsRecording(false);
+    setIsSpeaking(false);
+    isPlayingRef.current = false;
+    nextPlayTimeRef.current = 0;
+    if (speakingTimeoutRef.current) {
+      window.clearTimeout(speakingTimeoutRef.current);
+    }
   };
 
   const sendTextQuery = (text: string) => {
