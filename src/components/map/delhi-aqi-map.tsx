@@ -31,6 +31,45 @@ export function DelhiAqiMap() {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [updatedAt, setUpdatedAt] = useState<string>();
   const [stationQuery, setStationQuery] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectStation = useCallback((targetName: string) => {
+    const needle = targetName.trim().toLowerCase();
+    const match = aqiData?.stations.features.find((feature) =>
+      feature.properties.station.toLowerCase() === needle ||
+      feature.properties.station.toLowerCase().includes(needle)
+    );
+    const map = mapRef.current;
+    if (!match || !map) return;
+
+    setStationQuery(match.properties.station);
+    setShowDropdown(false);
+
+    const coordinates = match.geometry.coordinates as [number, number];
+    map.flyTo({ center: coordinates, zoom: Math.max(map.getZoom(), 12.5), duration: 750, essential: true });
+    openStationPopup(
+      map,
+      coordinates,
+      match.properties,
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
+  }, [aqiData]);
+
+  const handleStationSearch = useCallback(() => {
+    if (!stationQuery.trim()) return;
+    selectStation(stationQuery);
+  }, [selectStation, stationQuery]);
 
   const paintAqiData = useCallback((payload: AqiApiResponse | null) => {
     const map = mapRef.current;
@@ -120,12 +159,16 @@ export function DelhiAqiMap() {
     });
 
     const setupMapLayers = () => {
-      if (map.getSource(SURFACE_SOURCE)) return;
+      if (map.getSource(SURFACE_SOURCE)) {
+        if (dataRef.current) paintAqiData(dataRef.current);
+        return;
+      }
       const initialData = dataRef.current;
       map.addSource(SURFACE_SOURCE, { type: "geojson", data: initialData?.surface ?? EMPTY_GEOJSON });
       map.addSource(STATIONS_SOURCE, { type: "geojson", data: initialData?.stations ?? EMPTY_GEOJSON });
 
-      const firstLabelLayer = map.getStyle().layers?.find((layer: { type: string; id: string }) => layer.type === "symbol")?.id;
+      const firstLabelLayer = map.getStyle()?.layers?.find((layer: { type: string; id: string }) => layer.type === "symbol")?.id;
+      
       map.addLayer({
         id: SURFACE_LAYER,
         type: "heatmap",
@@ -144,7 +187,7 @@ export function DelhiAqiMap() {
             1, CPCB_AQI_SCALE[5].color,
           ],
           "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 26, 10, 84, 12, 280, 14, 500],
-          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.2, 12, 0.18, 14, 0.16],
+          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.3, 12, 0.25, 14, 0.2],
         },
       }, firstLabelLayer);
 
@@ -153,12 +196,10 @@ export function DelhiAqiMap() {
         type: "circle",
         source: SURFACE_SOURCE,
         paint: {
-          // Radius follows the screen-space size of the 4 km IDW grid. The
-          // overlap and full blur make one continuous field rather than dots.
           "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 22, 10, 82, 12, 310, 14, 980],
           "circle-color": ["interpolate", ["linear"], ["get", "aqi"], ...CIRCLE_COLOR_STOPS],
-          "circle-blur": 1,
-          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.46, 12, 0.43, 14, 0.4],
+          "circle-blur": 0.8,
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.55, 12, 0.5, 14, 0.45],
         },
       }, firstLabelLayer);
 
@@ -167,10 +208,10 @@ export function DelhiAqiMap() {
         type: "circle",
         source: STATIONS_SOURCE,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 10, 4.2, 13, 6.5, 16, 9],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 10, 5.5, 13, 8, 16, 11],
           "circle-color": ["interpolate", ["linear"], ["get", "aqi"], ...CIRCLE_COLOR_STOPS],
-          "circle-stroke-width": 1.4,
-          "circle-stroke-color": "rgba(255,255,255,0.92)",
+          "circle-stroke-width": 1.8,
+          "circle-stroke-color": "rgba(255,255,255,0.95)",
           "circle-opacity": 0.98,
         },
       });
@@ -180,7 +221,7 @@ export function DelhiAqiMap() {
         type: "circle",
         source: STATIONS_SOURCE,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 9, 10, 13, 14, 20],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 12, 10, 16, 14, 24],
           "circle-color": "rgba(0,0,0,0.01)",
           "circle-opacity": 0.01,
         },
@@ -194,8 +235,9 @@ export function DelhiAqiMap() {
         openStationPopup(map, feature.geometry.coordinates as [number, number], props, prefersReducedMotion);
       });
 
-      paintAqiData(dataRef.current);
-
+      if (dataRef.current) {
+        paintAqiData(dataRef.current);
+      }
     };
     map.on("style.load", setupMapLayers);
     map.once("load", setupMapLayers);
@@ -258,21 +300,11 @@ export function DelhiAqiMap() {
     return stationOptions.filter((station) => station.toLowerCase().includes(needle)).length;
   }, [stationOptions, stationQuery]);
 
-  const handleStationSearch = useCallback(() => {
+  const filteredStations = useMemo(() => {
     const needle = stationQuery.trim().toLowerCase();
-    const match = aqiData?.stations.features.find((feature) =>
-      feature.properties.station.toLowerCase().includes(needle),
-    );
-    const map = mapRef.current;
-    if (!needle || !match || !map) return;
-
-    const coordinates = match.geometry.coordinates as [number, number];
-    map.flyTo({ center: coordinates, zoom: Math.max(map.getZoom(), 11), duration: 650, essential: true });
-    openStationPopup(
-      map,
-      coordinates,
-      match.properties,
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    if (!needle) return aqiData?.stations.features ?? [];
+    return (aqiData?.stations.features ?? []).filter((f) =>
+      f.properties.station.toLowerCase().includes(needle)
     );
   }, [aqiData, stationQuery]);
 
@@ -282,21 +314,54 @@ export function DelhiAqiMap() {
       <div className={styles.mapVeil} aria-hidden="true" />
       <MapStatus state={state} updatedAt={updatedAt} metrics={metrics} />
       <section className={styles.commandPanel} aria-label="Delhi NCR command center">
-        <form className={styles.searchShell} onSubmit={(event) => { event.preventDefault(); handleStationSearch(); }}>
-          <span aria-hidden="true">⌕</span>
-          <input
-            type="search"
-            placeholder="Search CPCB station..."
-            aria-label="Search CPCB station"
-            list="station-options"
-            value={stationQuery}
-            onChange={(event) => setStationQuery(event.target.value)}
-          />
-          <datalist id="station-options">
-            {stationOptions.map((station) => <option key={station} value={station} />)}
-          </datalist>
-          <button type="submit" aria-label="Go to station">Go</button>
-        </form>
+        <div ref={searchContainerRef} className={styles.searchContainer}>
+          <form
+            className={styles.searchShell}
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleStationSearch();
+            }}
+          >
+            <span aria-hidden="true">⌕</span>
+            <input
+              type="search"
+              placeholder="Search CPCB station..."
+              aria-label="Search CPCB station"
+              value={stationQuery}
+              onFocus={() => setShowDropdown(true)}
+              onChange={(event) => {
+                setStationQuery(event.target.value);
+                setShowDropdown(true);
+              }}
+            />
+            <button type="submit" aria-label="Go to station">Go</button>
+          </form>
+
+          {showDropdown && filteredStations.length > 0 && (
+            <div className={styles.searchDropdown} role="listbox">
+              {filteredStations.slice(0, 30).map((f) => (
+                <div
+                  key={f.properties.station}
+                  className={styles.searchItem}
+                  role="option"
+                  aria-selected={stationQuery === f.properties.station}
+                  onClick={() => selectStation(f.properties.station)}
+                >
+                  <span>{f.properties.station}</span>
+                  <span
+                    className={styles.searchItemBadge}
+                    style={{
+                      backgroundColor: getAqiColor(f.properties.aqi),
+                      color: f.properties.aqi > 200 ? "#ffffff" : "#000000",
+                    }}
+                  >
+                    AQI {f.properties.aqi}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className={styles.regionCard}>
           <div>

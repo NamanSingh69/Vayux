@@ -43,10 +43,21 @@ export function AqiLegend() {
         <span>Severe</span>
       </div>
       <div className={styles.gradient}>
-        {CPCB_AQI_SCALE.map((item) => <span key={item.label} style={{ backgroundColor: item.color }} />)}
+        {CPCB_AQI_SCALE.map((item) => (
+          <span
+            key={item.label}
+            style={{ backgroundColor: item.color }}
+            title={`${item.label} (${item.min}-${item.max})`}
+          />
+        ))}
       </div>
       <div className={styles.legendTicks} aria-hidden="true">
-        {CPCB_AQI_SCALE.map((item) => <span key={item.min}>{item.min}</span>)}
+        <span>0</span>
+        <span>51</span>
+        <span>101</span>
+        <span>201</span>
+        <span>301</span>
+        <span>401</span>
         <span>500</span>
       </div>
     </aside>
