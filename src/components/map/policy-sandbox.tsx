@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import styles from "./map.module.css";
 
 interface SimulationResult {
@@ -19,9 +19,11 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
   const [stubble, setStubble] = useState(1.0);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const runSimulation = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/simulate", {
         method: "POST",
@@ -35,12 +37,16 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
           dust: 1.0
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as SimulationResult | { error?: string };
+      if (!res.ok || !("simulated_aqi" in data)) {
+        throw new Error("error" in data ? data.error ?? "Simulation service is unavailable" : "Simulation service is unavailable");
+      }
       setResult(data);
-    } catch (error) {
-      console.error("Simulation failed:", error);
+    } catch (simulationError) {
+      setError(simulationError instanceof Error ? simulationError.message : "Simulation service is unavailable");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -53,39 +59,64 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
         </div>
       </div>
 
-      <div className={styles.controlGroup}>
-        <label>
-          <span>Stubble Burning (Punjab/Haryana)</span>
-          <span>{Math.round(stubble * 100)}%</span>
+      <div
+        className={styles.controlGroup}
+        style={{ "--policy-progress": `${stubble * 100}%`, "--policy-accent": "#e66f3c" } as CSSProperties}
+      >
+        <label htmlFor="stubble-control">
+          <span className={styles.controlLabel}>
+            <small>Agricultural source</small>
+            <strong>Stubble Burning</strong>
+            <span>Punjab / Haryana</span>
+          </span>
+          <output htmlFor="stubble-control">{Math.round(stubble * 100)}%</output>
         </label>
-        <input 
-          type="range" min="0" max="1" step="0.1" value={stubble} 
-          onChange={(e) => setStubble(parseFloat(e.target.value))}
+        <input
+          id="stubble-control"
+          type="range" min="0" max="1" step="0.1" value={stubble}
+          aria-valuetext={`${Math.round(stubble * 100)} percent of current emissions`}
+          onChange={(event) => setStubble(Number.parseFloat(event.target.value))}
         />
+        <div className={styles.controlScale} aria-hidden="true"><span>Reduced</span><span>Current</span></div>
       </div>
 
-      <div className={styles.controlGroup}>
-        <label>
-          <span>Vehicular Emissions (Delhi NCR)</span>
-          <span>{Math.round(vehicular * 100)}%</span>
+      <div
+        className={styles.controlGroup}
+        style={{ "--policy-progress": `${vehicular * 100}%`, "--policy-accent": "#5065d8" } as CSSProperties}
+      >
+        <label htmlFor="vehicular-control">
+          <span className={styles.controlLabel}>
+            <small>Urban source</small>
+            <strong>Vehicular Emissions</strong>
+            <span>Delhi NCR</span>
+          </span>
+          <output htmlFor="vehicular-control">{Math.round(vehicular * 100)}%</output>
         </label>
-        <input 
-          type="range" min="0" max="1" step="0.1" value={vehicular} 
-          onChange={(e) => setVehicular(parseFloat(e.target.value))}
+        <input
+          id="vehicular-control"
+          type="range" min="0" max="1" step="0.1" value={vehicular}
+          aria-valuetext={`${Math.round(vehicular * 100)} percent of current emissions`}
+          onChange={(event) => setVehicular(Number.parseFloat(event.target.value))}
         />
+        <div className={styles.controlScale} aria-hidden="true"><span>Reduced</span><span>Current</span></div>
       </div>
 
-      <button 
+      <button
+        type="button"
         onClick={runSimulation}
         disabled={loading}
-        className={styles.runButton}>
-        {loading ? "Running..." : "Run Simulation"}
+        className={styles.runButton}
+        aria-busy={loading}
+      >
+        {loading && <span className={styles.buttonSpinner} aria-hidden="true" />}
+        <span>{loading ? "Simulating scenario…" : "Run scenario"}</span>
+        {!loading && <span className={styles.buttonArrow} aria-hidden="true">→</span>}
       </button>
 
       {result && (
         <div className={styles.simResult}>
           <div>
-            <span>Simulated AQI</span>
+            <span>Scenario AQI</span>
             <strong>{result.simulated_aqi}</strong>
           </div>
           <p>
@@ -93,6 +124,7 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
           </p>
         </div>
       )}
+      {error && <p className={styles.panelError} role="alert">{error}</p>}
     </aside>
   );
 }

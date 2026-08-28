@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 import gsap from "gsap";
 import { CPCB_AQI_SCALE } from "@/lib/aqi/cpcb";
 import styles from "./map.module.css";
 
-export function AqiLegend() {
+interface AqiLegendProps {
+  activeAqi: number;
+}
+
+export function AqiLegend({ activeAqi }: AqiLegendProps) {
   const legendRef = useRef<HTMLElement>(null);
+  const activeBand = CPCB_AQI_SCALE.find((item) => activeAqi <= item.max)
+    ?? CPCB_AQI_SCALE[CPCB_AQI_SCALE.length - 1];
+  const position = Math.max(1.5, Math.min((activeAqi / 500) * 100, 98.5));
 
   useEffect(() => {
     const element = legendRef.current;
@@ -37,16 +44,33 @@ export function AqiLegend() {
   }, []);
 
   return (
-    <aside ref={legendRef} className={styles.legend} aria-label="Indian AQI scale">
-      <div className={styles.legendLabels}>
-        <span>Good</span>
-        <span>Severe</span>
+    <aside
+      ref={legendRef}
+      className={styles.legend}
+      aria-label={`Indian AQI scale. Current forecast ${activeAqi}, ${activeBand.label}`}
+      style={{
+        "--legend-position": `${position}%`,
+        "--legend-accent": activeBand.color,
+      } as CSSProperties}
+    >
+      <div className={styles.legendSummary}>
+        <span>AQI scale</span>
+        <strong>{activeBand.label}</strong>
       </div>
-      <div className={styles.gradient}>
-        {CPCB_AQI_SCALE.map((item) => <span key={item.label} style={{ backgroundColor: item.color }} />)}
+      <div className={styles.legendScale}>
+        <div className={styles.gradient}>
+          {CPCB_AQI_SCALE.map((item) => (
+            <span key={item.label} title={`${item.label}: ${item.min}–${item.max}`} style={{ backgroundColor: item.color }} />
+          ))}
+        </div>
+        <span className={styles.legendMarker} aria-hidden="true"><i /></span>
       </div>
       <div className={styles.legendTicks} aria-hidden="true">
-        {CPCB_AQI_SCALE.map((item) => <span key={item.min}>{item.min}</span>)}
+        <span>0</span>
+        <span>100</span>
+        <span>200</span>
+        <span>300</span>
+        <span>400</span>
         <span>500</span>
       </div>
     </aside>
