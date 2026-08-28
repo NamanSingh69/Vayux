@@ -7,14 +7,18 @@ interface UseJarvisVoiceOptions {
 
 export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const wsUrl = options.wsUrl || process.env.NEXT_PUBLIC_WS_URL || "wss://vayux.onrender.com/ws/jarvis-live";
-
+  
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
 
   const wsRef = useRef<WebSocket | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  
+  const speakerContextRef = useRef<AudioContext | null>(null);
+  const micContextRef = useRef<AudioContext | null>(null);
+  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
@@ -31,12 +35,12 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     setIsSpeaking(true);
     const chunk = audioQueueRef.current.shift()!;
 
-    if (!audioContextRef.current) {
+    if (!speakerContextRef.current) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      audioContextRef.current = new AudioCtx({ sampleRate: 24000 });
+      speakerContextRef.current = new AudioCtx({ sampleRate: 24000 });
     }
 
-    const ctx = audioContextRef.current;
+    const ctx = speakerContextRef.current;
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
@@ -99,10 +103,15 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
 
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const audioCtx = new AudioCtx({ sampleRate: 16000 });
+      
+      micContextRef.current = audioCtx;
+      
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume();
       }
       const source = audioCtx.createMediaStreamSource(stream);
+      micSourceRef.current = source;
+      
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
 
       processor.onaudioprocess = (e) => {
@@ -127,7 +136,13 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
 
   const stopListening = () => {
     processorRef.current?.disconnect();
+    micSourceRef.current?.disconnect();
     mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    
+    if (micContextRef.current && micContextRef.current.state !== 'closed') {
+      micContextRef.current.close();
+    }
+    
     setIsRecording(false);
   };
 
@@ -143,8 +158,8 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
       if (wsRef.current) {
         wsRef.current.close();
       }
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
+      if (speakerContextRef.current && speakerContextRef.current.state !== 'closed') {
+        speakerContextRef.current.close();
       }
     };
   }, []);

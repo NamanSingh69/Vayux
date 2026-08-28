@@ -16,9 +16,27 @@ export default function JarvisVoiceWidget() {
               <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
               <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">VayuVani (वायुवाणी) AI</span>
             </div>
-            <span className="rounded-full bg-cyan-950/80 px-2 py-0.5 text-[10px] font-semibold text-cyan-400 border border-cyan-800/50">
-              {isSpeaking ? '🔊 Speaking...' : isRecording ? '🎙️ Listening (Live)...' : 'Ready'}
-            </span>
+
+            {/* Grouped Status Pill and Close Button */}
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-cyan-950/80 px-2 py-0.5 text-[10px] font-semibold text-cyan-400 border border-cyan-800/50">
+                {isSpeaking ? '🔊 Speaking...' : isRecording ? '🎙️ Listening (Live)...' : 'Ready'}
+              </span>
+
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  if (isRecording) stopListening(); // Safely kill the mic when closing!
+                }}
+                className="text-slate-400 hover:text-rose-400 transition-colors"
+                aria-label="Close"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="my-3 min-h-[68px] max-h-48 overflow-y-auto rounded-xl bg-slate-900/60 p-2.5 text-xs leading-relaxed text-slate-200 border border-slate-800">
@@ -32,11 +50,10 @@ export default function JarvisVoiceWidget() {
           <button
             type="button"
             onClick={isRecording ? stopListening : startListening}
-            className={`w-full rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-              isRecording
+            className={`w-full rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${isRecording
                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50 hover:bg-rose-500/30'
                 : 'bg-gradient-to-r from-cyan-600/30 to-blue-600/30 text-cyan-200 border border-cyan-400/50 hover:from-cyan-600/40 hover:to-blue-600/40'
-            }`}
+              }`}
           >
             {isRecording ? (
               <>
@@ -62,13 +79,12 @@ export default function JarvisVoiceWidget() {
           setIsOpen(!isOpen);
           if (!isOpen && !isRecording) startListening();
         }}
-        className={`group relative flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300 ${
-          isSpeaking
+        className={`group relative flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300 ${isSpeaking
             ? 'scale-110 shadow-[0_0_35px_rgba(6,182,212,0.9)]'
             : isRecording
-            ? 'scale-105 shadow-[0_0_30px_rgba(16,185,129,0.8)]'
-            : 'shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:scale-105'
-        }`}
+              ? 'scale-105 shadow-[0_0_30px_rgba(16,185,129,0.8)]'
+              : 'shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:scale-105'
+          }`}
       >
         <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-cyan-600 via-teal-500 to-blue-600 opacity-85 blur-sm animate-pulse" />
         <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 border border-cyan-400/60 shadow-inner">
