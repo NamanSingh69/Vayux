@@ -132,7 +132,9 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
                             model_turn = server_content.model_turn
                             if model_turn is not None:
                                 for part in model_turn.parts:
-                                    if part.text:
+                                    # Filter out internal thoughts and planning text from the user transcript
+                                    is_thought = getattr(part, 'thought', False)
+                                    if part.text and not is_thought and not part.text.strip().startswith("**"):
                                         await websocket.send_json({"type": "transcript", "text": part.text})
                                     if part.inline_data:
                                         # Stream 24kHz audio bytes back to browser

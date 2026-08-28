@@ -153,23 +153,29 @@ async def execute_jarvis_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict
             weather = await fetch_live_weather(lat, lon)
             weather_fc = await fetch_72h_weather_forecast(lat, lon)
             fires = await fetch_live_fires()
+            regional_aqi_info = await fetch_live_regional_aqi()
             
-            # If location specified, get station baseline
-            current_aqi = 72
-            station_title = "Delhi NCR Region"
+            current_aqi = regional_aqi_info.get("regional_aqi", 251)
+            station_title = "Delhi NCR Regional Average"
             if loc_name:
                 st_info = await fetch_station_details_by_name_or_coords(loc_name, lat, lon)
                 if st_info.get("status") == "SUCCESS":
-                    current_aqi = st_info.get("aqi", 72)
+                    current_aqi = st_info.get("aqi", current_aqi)
                     station_title = st_info.get("matched_station", loc_name)
-            else:
-                regional_aqi_info = await fetch_live_regional_aqi()
-                current_aqi = regional_aqi_info.get("regional_aqi", 72)
+
+            def get_cpcb_cat(val: int) -> str:
+                if val <= 50: return "Good"
+                elif val <= 100: return "Satisfactory"
+                elif val <= 200: return "Moderate"
+                elif val <= 300: return "Poor"
+                elif val <= 400: return "Very Poor"
+                else: return "Severe"
 
             base_pm25 = current_aqi * 0.75
             hours = np.arange(72)
-            diurnal_osc = 18.0 * np.sin(2.0 * np.pi * (hours - 6) / 24.0)
-            fire_contribution = min(30.0, len(fires) * 4.0)
+            # Diurnal nocturnal inversion cycle: peak in early morning (+25 AQI), convective trough in afternoon (-25 AQI)
+            diurnal_osc = 22.0 * np.sin(2.0 * np.pi * (hours - 6) / 24.0)
+            fire_contribution = min(35.0, len(fires) * 4.5)
             
             forecast_pm25 = np.clip(base_pm25 + diurnal_osc + fire_contribution * (1.0 - np.exp(-hours / 24.0)), 15.0, 480.0)
             forecast_aqi = [int(p * 1.33) for p in forecast_pm25]
@@ -182,14 +188,19 @@ async def execute_jarvis_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict
                 "status": "SUCCESS",
                 "target_location": station_title,
                 "current_aqi": current_aqi,
+                "current_category": get_cpcb_cat(current_aqi),
                 "peak_forecast_aqi": max_aqi,
+                "peak_category": get_cpcb_cat(max_aqi),
                 "trough_forecast_aqi": min_aqi,
-                "current_temperature_c": weather_fc.get("current_temp", 28.0),
-                "forecasted_min_temp_c": weather_fc.get("min_temp", 24.5),
-                "forecasted_max_temp_c": weather_fc.get("max_temp", 34.8),
+                "trough_category": get_cpcb_cat(min_aqi),
+                "temperature_forecast": {
+                    "current_c": weather_fc.get("current_temp", 28.2),
+                    "min_c": weather_fc.get("min_temp", 24.5),
+                    "max_c": weather_fc.get("max_temp", 34.8)
+                },
                 "hourly_temperature_first_24h": weather_fc.get("hourly_temperatures", [])[:24],
                 "hourly_aqi_first_24h": forecast_aqi[:24],
-                "summary": f"72-hour model forecast for {station_title}: AQI starting at {current_aqi}, peaking at {max_aqi}, and troughing at {min_aqi}. Temperature ranges from {weather_fc.get('min_temp', 24.5)}°C to {weather_fc.get('max_temp', 34.8)}°C."
+                "summary": f"72-hour forecast for {station_title}: AQI currently {current_aqi} ({get_cpcb_cat(current_aqi)}), peaking at {max_aqi} ({get_cpcb_cat(max_aqi)}) during nocturnal inversion and troughing at {min_aqi} ({get_cpcb_cat(min_aqi)}). Temperature ranges from {weather_fc.get('min_temp', 24.5)}°C to {weather_fc.get('max_temp', 34.8)}°C."
             }
 
         elif tool_name == "search_environmental_and_news_intel":
