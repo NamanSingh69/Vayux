@@ -9,8 +9,8 @@ class PhysicsResidualAdapter:
     """
     def __init__(
         self,
-        alpha: float = 0.0012,
-        gamma: float = 0.65,
+        alpha: float = 0.00325,
+        gamma: float = 0.837,
         pasquill_params: Dict[str, float] = None,
         u_0: float = 1.0,
         u_min: float = 0.1
@@ -21,8 +21,8 @@ class PhysicsResidualAdapter:
         self.u_min = u_min
         
         self.pasquill = pasquill_params or {
-            "a": 0.13, "b": 0.90,
-            "c": 0.10, "d": 0.85
+            "a": 0.144, "b": 0.863,
+            "c": 0.083, "d": 0.849
         }
 
     def compute_pblh_multiplier(
