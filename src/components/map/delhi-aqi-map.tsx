@@ -549,10 +549,9 @@ const handleStationSearch = useCallback(() => {
       <div ref={dockRef} className={styles.bottomDock}>
         <ForecastTimeline
           onHourChange={handleForecastChange}
-          baselineAqi={selectedStation ? selectedStation.aqi : (metrics.regionalAqi ?? 260)}
-          stationName={selectedStation ? selectedStation.station : undefined}
+          baselineAqi={metrics.regionalAqi ?? 260}
         />
-        <AqiLegend activeAqi={forecastAqi ?? (selectedStation ? selectedStation.aqi : (metrics.regionalAqi ?? 0))} />
+        <AqiLegend activeAqi={forecastAqi ?? metrics.regionalAqi ?? 0} />
         <div className={styles.mapAttribution}>
           <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a>
           <span>·</span>

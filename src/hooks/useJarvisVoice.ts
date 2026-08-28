@@ -12,6 +12,8 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [activeVoiceModel, setActiveVoiceModel] = useState<string>('gemini-2.5-flash-native-audio-latest');
+  const [activeReasoningModel, setActiveReasoningModel] = useState<string>('gemini-3.7-flash');
 
   const wsRef = useRef<WebSocket | null>(null);
   
@@ -23,6 +25,25 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef(false);
+  const nextPlayTimeRef = useRef<number>(0);
+
+  // Fetch best reasoning model for background cognitive tasks on mount
+  useEffect(() => {
+    async function loadBestModel() {
+      try {
+        const res = await fetch("/api/models/best");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.model_id) {
+            setActiveReasoningModel(data.model_id);
+          }
+        }
+      } catch {
+        // Fallback initialized
+      }
+    }
+    loadBestModel();
+  }, []);
 
   const playNextAudioChunk = useCallback(async function playNext() {
     if (audioQueueRef.current.length === 0) {
@@ -55,10 +76,22 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(ctx.destination);
+    
+    // Scheduled playback to eliminate jitter and audio pops
+    const now = ctx.currentTime;
+    const startTime = Math.max(now, nextPlayTimeRef.current);
+    source.start(startTime);
+    nextPlayTimeRef.current = startTime + audioBuffer.duration;
+
     source.onended = () => {
-      playNext();
+      if (audioQueueRef.current.length > 0) {
+        playNext();
+      } else {
+        isPlayingRef.current = false;
+        setIsSpeaking(false);
+        nextPlayTimeRef.current = 0;
+      }
     };
-    source.start();
   }, []);
 
   const connect = useCallback(() => {
@@ -71,12 +104,17 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     ws.onclose = () => {
       setIsConnected(false);
       setIsRecording(false);
+      setIsSpeaking(false);
+      isPlayingRef.current = false;
     };
 
     ws.onmessage = (event) => {
       if (typeof event.data === 'string') {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'status' && msg.voice_model) {
+            setActiveVoiceModel(msg.voice_model);
+          }
           if (msg.type === 'transcript') {
             setTranscript((prev) => (prev ? prev + ' ' + msg.text : msg.text));
             options.onTranscript?.(msg.text);
@@ -98,7 +136,15 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
   const startListening = async () => {
     connect();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
       mediaStreamRef.current = stream;
 
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -116,6 +162,9 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
 
       processor.onaudioprocess = (e) => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+        // Echo Gating: Do not forward microphone feedback while assistant is outputting audio
+        if (isPlayingRef.current) return;
+
         const inputData = e.inputBuffer.getChannelData(0);
         const pcm16 = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
@@ -169,6 +218,8 @@ export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
     isRecording,
     isSpeaking,
     transcript,
+    activeVoiceModel,
+    activeReasoningModel,
     startListening,
     stopListening,
     sendTextQuery,

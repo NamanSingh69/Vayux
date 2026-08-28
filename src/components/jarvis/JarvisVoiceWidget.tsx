@@ -5,16 +5,19 @@ import { useJarvisVoice } from '@/hooks/useJarvisVoice';
 
 export default function JarvisVoiceWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const { isConnected, isRecording, isSpeaking, transcript, startListening, stopListening } = useJarvisVoice();
+  const { isConnected, isRecording, isSpeaking, transcript, activeVoiceModel, activeReasoningModel, startListening, stopListening } = useJarvisVoice();
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 font-sans">
       {isOpen && (
-        <div className="w-88 rounded-2xl border border-cyan-500/40 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-2xl transition-all duration-300">
+        <div className="w-96 rounded-2xl border border-cyan-500/40 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-2xl transition-all duration-300">
           <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2.5">
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">VayuVani (वायुवाणी) AI</span>
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-cyan-300 block">VayuVani (वायुवाणी) AI</span>
+                <span className="text-[9px] text-slate-400 font-mono">Live: {activeVoiceModel.replace('gemini-', '')}</span>
+              </div>
             </div>
 
             {/* Grouped Status Pill and Close Button */}
@@ -24,9 +27,10 @@ export default function JarvisVoiceWidget() {
               </span>
 
               <button
+                type="button"
                 onClick={() => {
                   setIsOpen(false);
-                  if (isRecording) stopListening(); // Safely kill the mic when closing!
+                  if (isRecording) stopListening(); // Safely kill the mic when closing
                 }}
                 className="text-slate-400 hover:text-rose-400 transition-colors"
                 aria-label="Close"
@@ -39,10 +43,16 @@ export default function JarvisVoiceWidget() {
             </div>
           </div>
 
-          <div className="my-3 min-h-[68px] max-h-48 overflow-y-auto rounded-xl bg-slate-900/60 p-2.5 text-xs leading-relaxed text-slate-200 border border-slate-800">
+          {/* Model Selection GPT-Live Architecture Badge */}
+          <div className="mt-2 flex items-center justify-between px-1 text-[10px] text-teal-400 bg-teal-950/40 rounded-lg p-1.5 border border-teal-800/30">
+            <span>⚡ Dual-Agent Delegation:</span>
+            <span className="font-semibold text-emerald-300 font-mono">🧠 {activeReasoningModel}</span>
+          </div>
+
+          <div className="my-2.5 min-h-[68px] max-h-48 overflow-y-auto rounded-xl bg-slate-900/60 p-2.5 text-xs leading-relaxed text-slate-200 border border-slate-800">
             {transcript || (
               <span className="text-slate-400 italic">
-                Speak freely in English or Hindi: &ldquo;VayuVani, why is air quality severe tonight?&rdquo; or &ldquo;Simulate 50% vehicle curbs...&rdquo;
+                Speak freely in English or Hindi: &ldquo;What is the live weather and air quality?&rdquo;, &ldquo;Are there active stubble fires?&rdquo;, or &ldquo;Simulate 50% vehicle curbs...&rdquo;
               </span>
             )}
           </div>

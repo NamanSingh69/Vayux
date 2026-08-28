@@ -155,7 +155,7 @@ export function ForecastTimeline({ onHourChange, baselineAqi, stationName }: For
   }, [isPlaying, selectedHour]);
 
   const trendLabel = selectedHour === 0
-    ? (stationName ? "Station baseline" : "Regional baseline")
+    ? (stationName ? `Station baseline: ${stationName.split(",")[0]}` : "Regional baseline (Delhi NCR)")
     : delta === 0
       ? "Steady"
       : `${delta > 0 ? "↑" : "↓"} ${Math.abs(delta)} vs prior hour`;
@@ -175,7 +175,7 @@ export function ForecastTimeline({ onHourChange, baselineAqi, stationName }: For
           <span className={styles.forecastPulse} aria-hidden="true" />
           <div>
             <span className={styles.forecastEyebrow}>
-              72h Outlook {stationName ? `· ${stationName.split(",")[0]}` : "· Delhi NCR"}
+              {stationName ? `72h Outlook · ${stationName.split(",")[0]}` : "72h Regional Outlook (Delhi NCR)"}
             </span>
             <strong>{selectedHour === 0 ? "Live conditions" : currentItem.label}</strong>
           </div>
