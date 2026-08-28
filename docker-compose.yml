@@ -1,4 +1,76 @@
 services:
+  frontend:
+    build:
+      context: .
+    container_name: vayux-frontend
+    restart: unless-stopped
+    environment:
+      ATMOSPHERIC_ENGINE_URL: http://backend:8000
+      DATABASE_URL: postgresql://vayux:vayux@postgres:5432/vayux
+      DATA_GOV_IN_API_KEY: ${DATA_GOV_IN_API_KEY:-}
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/.next
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const s=require('net').connect(3000,'127.0.0.1');s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  migrate:
+    build:
+      context: .
+    container_name: vayux-migrate
+    restart: "no"
+    command: npm run db:push
+    environment:
+      DATABASE_URL: postgresql://vayux:vayux@postgres:5432/vayux
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    container_name: vayux-backend
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      NASA_FIRMS_KEY: ${NASA_FIRMS_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   postgres:
     image: postgres:16-alpine
     container_name: vayux-postgres

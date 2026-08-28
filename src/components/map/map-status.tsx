@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import vayuxLogo from "@/vayux.png";
@@ -12,6 +12,7 @@ interface MapStatusProps {
   metrics: {
     stationCount: number;
     category: string;
+    color: string;
   };
 }
 
@@ -79,12 +80,15 @@ export function MapStatus({ state, updatedAt, metrics }: MapStatusProps) {
 
   return (
     <div ref={wrapRef} className={styles.statusWrap} aria-live="polite">
-      <header className={styles.brand}>
+      <div className={styles.brand}>
         <Image className={styles.logo} src={vayuxLogo} alt="VayuX" priority />
         <span>Command Center</span>
-      </header>
+      </div>
       <div ref={statusRef} className={`${styles.status} ${state === "error" ? styles.statusError : ""}`}>{label}</div>
-      <div className={styles.systemPill}>
+      <div
+        className={styles.systemPill}
+        style={{ "--status-accent": metrics.color } as CSSProperties}
+      >
         <span />
         {state === "ready" ? `${metrics.category} · ${metrics.stationCount} stations` : "System nominal"}
       </div>
