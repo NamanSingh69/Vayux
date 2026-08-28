@@ -123,6 +123,7 @@ List 3-4 specific, high-leverage statutory directives under GRAP Stage-IV / Stag
 Based on the active simulation parameters executed in the **VayuX Policy Sandbox**:
 * **Optimized Target AQI:** {simulated_aqi}
 * **Net Particulate Reduction:** **{reduction}% Improvement** in ground-level $PM_{2.5}$ density.
+ "Do not use LaTeX or mathematical formatting. Write PM2.5 as plain text."
 
 ### 3. Statutory Actionable Recommendations (CAQM Compliance)
 1. **Enforcement:** Immediately deploy mechanical sweepers and water anti-smog guns along the Anand Vihar and Wazirpur transit corridors.
@@ -132,6 +133,12 @@ Based on the active simulation parameters executed in the **VayuX Policy Sandbox
 *Report automatically generated and verified by the VayuX Two-Way Coupled Atmospheric Engine.*
 """
     return {"status": "success", "advisory_markdown": fallback_report, "model": "template-fallback"}
+
+    # UptimeRobot Ping Route
+@app.head("/")
+@app.get("/")
+async def root_ping():
+    return {"status": "ok", "message": "VayuX Engine is live."}
 
 class PolicySimulationRequest(BaseModel):
     baseline_aqi: int = Field(default=340)
