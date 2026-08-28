@@ -19,6 +19,31 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [advisoryReport, setAdvisoryReport] = useState<string | null>(null);
+  const [loadingAdvisory, setLoadingAdvisory] = useState(false);
+
+  const handleGenerateBrief = async () => {
+    if (!result) return;
+    setLoadingAdvisory(true);
+    try {
+      const res = await fetch("https://vayux.onrender.com/api/v1/policy/generate-advisory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseline_aqi: baselineAqi,
+          simulated_aqi: result.simulated_aqi,
+          percentage_improvement: result.percentage_improvement
+        })
+      });
+      const data = await res.json();
+      setAdvisoryReport(data.advisory_markdown);
+    } catch (err) {
+      console.error("Failed to generate advisory", err);
+    } finally {
+      setLoadingAdvisory(false);
+    }
+  };
+
   const runSimulation = async () => {
     setLoading(true);
     setError(null);
@@ -97,8 +122,25 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
           <p style={{ fontSize: "13px", color: "#16a34a", marginTop: "8px", fontWeight: 500 }}>
             AQI improved by {result.percentage_improvement}%
           </p>
+
+          {/* AI Chief Minister Advisory Brief Button */}
+          <button
+            type="button"
+            onClick={handleGenerateBrief}
+            disabled={loadingAdvisory}
+            style={{ marginTop: "14px", width: "100%", padding: "10px", background: "#0d9488", color: "#fff", borderRadius: "8px", fontWeight: 600, fontSize: "12px", border: "none", cursor: "pointer" }}
+          >
+            {loadingAdvisory ? "Synthesizing Brief..." : "📄 Generate Chief Minister Policy Brief"}
+          </button>
         </div>
       )}
+
+      {advisoryReport && (
+        <div style={{ marginTop: "16px", maxHeight: "220px", overflowY: "auto", padding: "12px", background: "#0f172a", color: "#e2e8f0", borderRadius: "12px", fontSize: "11px", border: "1px solid #14b8a6" }}>
+          <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>{advisoryReport}</pre>
+        </div>
+      )}
+
       {error && <p className={styles.panelError} role="alert">{error}</p>}
     </div>
   );

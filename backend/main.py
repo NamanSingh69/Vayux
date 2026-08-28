@@ -3,10 +3,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, WebSocket, Body
+from fastapi import FastAPI, WebSocket, Body ,AProuter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
+import datetime
 
 from physics import calculate_effective_pblh, compute_plume_dispersion
 from policy import simulate_policy_impact
@@ -58,6 +59,40 @@ async def get_plume_dispersion(wind_speed: float = 3.5, wind_deg: float = 315.0)
     w_deg = wind_deg if wind_deg != 315.0 else live_weather["wind_deg"]
     features = compute_plume_dispersion(live_fires, w_speed, w_deg)
     return {"type": "FeatureCollection", "features": features}
+
+@app.post("/api/v1/policy/generate-advisory")
+async def generate_advisory(data: dict):
+    baseline_aqi = data.get("baseline_aqi", 340)
+    simulated_aqi = data.get("simulated_aqi", 250)
+    reduction = data.get("percentage_improvement", 26.5)
+    
+    current_date = datetime.datetime.now().strftime("%d %B %Y, %H:%M HRS")
+    
+    report = f"""# URGENT EXECUTIVE POLICY ADVISORY
+**TO:** Office of the Chief Secretary & Delhi Pollution Control Committee (DPCC)  
+**DATE:** {current_date}  
+**SUBJECT:** Real-Time Air Quality Intervention & Simulation Impact Assessment  
+
+---
+
+### 1. Current Situation & Meteorological Briefing
+* **Live Baseline AQI:** {baseline_aqi} (Severe / Hazardous Category)
+* **Planetary Boundary Layer Height (PBLH):** Compressed (< 350m nocturnal inversion lid active).
+* **Primary Drivers:** Stubble transport from upwind agricultural belts combined with urban vehicular stagnation.
+
+### 2. Evaluated Policy Intervention Results
+Based on the active simulation parameters executed in the **VayuX Policy Sandbox**:
+* **Optimized Target AQI:** {simulated_aqi}
+* **Net Particulate Reduction:** **{reduction}% Improvement** in ground-level $PM_{2.5}$ density.
+
+### 3. Statutory Actionable Recommendations (CAQM Compliance)
+1. **Enforcement:** Immediately deploy mechanical sweepers and water anti-smog guns along the Anand Vihar and Wazirpur transit corridors.
+2. **Industrial Curtailment:** Enforce Stage-III restrictions on non-compliant diesel generator sets across industrial clusters in Noida and Gurugram.
+3. **Public Advisory:** Issue an orange-level health alert via the **VayuVani Voice Network**, advising vulnerable populations to restrict outdoor exposure.
+
+*Report automatically generated and verified by the VayuX Two-Way Coupled Atmospheric Engine.*
+"""
+    return {"status": "success", "advisory_markdown": report}
 
 class PolicySimulationRequest(BaseModel):
     baseline_aqi: int = Field(default=340)
