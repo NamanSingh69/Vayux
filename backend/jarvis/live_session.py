@@ -36,7 +36,8 @@ async def handle_jarvis_live_websocket(websocket: WebSocket):
         return
 
     client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
-    model_id = "gemini-2.0-flash-exp"
+    # Target SOTA Gemini 3.5 Transcribe Live / 3.5 Flash engine
+    model_id = "gemini-3.5-transcribe-live"
 
     config = types.LiveConnectConfig(
         response_modalities=[types.LiveModality.AUDIO, types.LiveModality.TEXT],

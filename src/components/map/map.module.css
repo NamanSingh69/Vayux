@@ -280,7 +280,64 @@
 .metricGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
+}
+
+.physicsCard {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  border-radius: 16px;
+  background: rgba(8, 145, 178, 0.05);
+}
+
+.physicsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.physicsHeader span:first-child {
+  color: #0e7490;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.inversionPill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.physicsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+.physicsGrid div {
+  display: grid;
+  gap: 1px;
+}
+
+.physicsGrid span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.physicsGrid strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .compactMetric {

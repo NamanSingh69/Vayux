@@ -402,6 +402,31 @@ export function DelhiAqiMap() {
             <small>{metrics.dominantShare}</small>
           </div>
         </div>
+
+        <div className={styles.physicsCard}>
+          <div className={styles.physicsHeader}>
+            <span>Atmospheric Inversion & Coupling</span>
+            <span className={styles.inversionPill}>Inversion Active</span>
+          </div>
+          <div className={styles.physicsGrid}>
+            <div>
+              <span>Boundary Layer (PBLH)</span>
+              <strong>353m (Trapped)</strong>
+            </div>
+            <div>
+              <span>Solar Extinction</span>
+              <strong>-66.7% Flux</strong>
+            </div>
+            <div>
+              <span>Upwind NASA Fires</span>
+              <strong>3 Hotspots</strong>
+            </div>
+            <div>
+              <span>Wind Advection</span>
+              <strong>2.4 m/s NW</strong>
+            </div>
+          </div>
+        </div>
       </section>
       <PolicySandbox baselineAqi={metrics.regionalAqi ?? 340} />
       <ForecastTimeline onHourChange={handleForecastChange} baselineAqi={metrics.regionalAqi ?? 260} />
