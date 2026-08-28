@@ -23,19 +23,13 @@ export function ForecastTimeline({ onHourChange, baselineAqi, stationName }: For
 
   useEffect(() => {
     async function loadForecast() {
+      if (!baselineAqi || baselineAqi <= 0) return;
       try {
         const res = await fetch("/api/forecast", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             baseline_aqi: baselineAqi,
-            history_pm25: [
-              Math.max(30, baselineAqi * 0.7),
-              Math.max(30, baselineAqi * 0.72),
-              Math.max(30, baselineAqi * 0.75),
-              Math.max(30, baselineAqi * 0.78),
-              Math.max(30, baselineAqi * 0.8),
-            ],
           }),
         });
         if (res.ok) {
@@ -54,7 +48,7 @@ export function ForecastTimeline({ onHourChange, baselineAqi, stationName }: For
   const hourlyData = useMemo(() => {
     const start = forecastStart || new Date();
     const currentHourOfDay = start.getHours();
-    const basePhase = ((currentHourOfDay - 9) * Math.PI) / 12;
+    const basePhase = ((currentHourOfDay - 6) * Math.PI) / 12;
     const baseSin = Math.sin(basePhase);
 
     return Array.from({ length: 73 }, (_, hour) => {
@@ -70,14 +64,14 @@ export function ForecastTimeline({ onHourChange, baselineAqi, stationName }: For
       const modelAqi = forecastAqiSeries[hour - 1];
       let predictedAqi = baselineAqi;
 
-      if (typeof modelAqi === "number" && Number.isFinite(modelAqi)) {
+      if (typeof modelAqi === "number" && Number.isFinite(modelAqi) && modelAqi > 0) {
         predictedAqi = modelAqi;
       } else {
         const hourOfDay = forecastTime.getHours();
-        const hourPhase = ((hourOfDay - 9) * Math.PI) / 12;
+        const hourPhase = ((hourOfDay - 6) * Math.PI) / 12;
         const diurnalDiff = Math.sin(hourPhase) - baseSin;
-        const diurnalMultiplier = 1.0 + 0.20 * diurnalDiff - (hour / 250);
-        predictedAqi = Math.round(baselineAqi * diurnalMultiplier);
+        const targetAqi = Math.round(baselineAqi + 22.0 * diurnalDiff);
+        predictedAqi = Math.max(20, Math.min(500, targetAqi));
       }
 
       const multiplier = baselineAqi > 0 ? predictedAqi / baselineAqi : 1.0;
