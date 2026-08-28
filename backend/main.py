@@ -84,6 +84,7 @@ async def generate_advisory(data: dict):
 Based on the active simulation parameters executed in the **VayuX Policy Sandbox**:
 * **Optimized Target AQI:** {simulated_aqi}
 * **Net Particulate Reduction:** **{reduction}% Improvement** in ground-level $PM_{2.5}$ density.
+ "Do not use LaTeX or mathematical formatting. Write PM2.5 as plain text."
 
 ### 3. Statutory Actionable Recommendations (CAQM Compliance)
 1. **Enforcement:** Immediately deploy mechanical sweepers and water anti-smog guns along the Anand Vihar and Wazirpur transit corridors.
