@@ -37,17 +37,6 @@ export function DelhiAqiMap() {
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (aqiData && !selectedStation) {
-      const defaultMatch =
-        aqiData.stations.features.find((f) => f.properties.station.toLowerCase().includes("jahangirpuri")) ??
-        aqiData.stations.features[0];
-      if (defaultMatch) {
-        setSelectedStation(defaultMatch.properties);
-      }
-    }
-  }, [aqiData, selectedStation]);
-
-  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
@@ -182,19 +171,19 @@ export function DelhiAqiMap() {
         source: SURFACE_SOURCE,
         paint: {
           "heatmap-weight": ["interpolate", ["linear"], ["get", "aqi"], 0, 0, 500, 1],
-          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 8, 0.86, 10, 0.68, 12, 0.5],
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 8, 0.7, 10, 0.55, 12, 0.4],
           "heatmap-color": [
             "interpolate", ["linear"], ["heatmap-density"],
             0, "rgba(52,168,83,0)",
-            0.04, CPCB_AQI_SCALE[0].color,
-            0.18, CPCB_AQI_SCALE[1].color,
-            0.34, CPCB_AQI_SCALE[2].color,
-            0.52, CPCB_AQI_SCALE[3].color,
-            0.72, CPCB_AQI_SCALE[4].color,
+            0.05, CPCB_AQI_SCALE[0].color,
+            0.20, CPCB_AQI_SCALE[1].color,
+            0.38, CPCB_AQI_SCALE[2].color,
+            0.56, CPCB_AQI_SCALE[3].color,
+            0.75, CPCB_AQI_SCALE[4].color,
             1, CPCB_AQI_SCALE[5].color,
           ],
-          "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 26, 10, 84, 12, 280, 14, 500],
-          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.3, 12, 0.25, 14, 0.2],
+          "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 20, 10, 60, 12, 180, 14, 380],
+          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.35, 12, 0.28, 14, 0.22],
         },
       }, firstLabelLayer);
 
@@ -203,10 +192,10 @@ export function DelhiAqiMap() {
         type: "circle",
         source: SURFACE_SOURCE,
         paint: {
-          "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 22, 10, 82, 12, 310, 14, 980],
+          "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, 14, 10, 48, 12, 160, 14, 420],
           "circle-color": ["interpolate", ["linear"], ["get", "aqi"], ...CIRCLE_COLOR_STOPS],
-          "circle-blur": 0.8,
-          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.55, 12, 0.5, 14, 0.45],
+          "circle-blur": 0.9,
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.22, 12, 0.2, 14, 0.18],
         },
       }, firstLabelLayer);
 
@@ -215,11 +204,11 @@ export function DelhiAqiMap() {
         type: "circle",
         source: STATIONS_SOURCE,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 10, 5.5, 13, 8, 16, 11],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4.5, 10, 6, 13, 8.5, 16, 12],
           "circle-color": ["interpolate", ["linear"], ["get", "aqi"], ...CIRCLE_COLOR_STOPS],
-          "circle-stroke-width": 1.8,
-          "circle-stroke-color": "rgba(255,255,255,0.95)",
-          "circle-opacity": 0.98,
+          "circle-stroke-width": 1.6,
+          "circle-stroke-color": "rgba(255,255,255,0.9)",
+          "circle-opacity": 0.95,
         },
       });
 

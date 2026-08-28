@@ -15,6 +15,7 @@ interface PolicySandboxProps {
 }
 
 export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [vehicular, setVehicular] = useState(1.0);
   const [stubble, setStubble] = useState(1.0);
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -43,14 +44,38 @@ export function PolicySandbox({ baselineAqi }: PolicySandboxProps) {
     setLoading(false);
   };
 
+  if (!isOpen) {
+    return (
+      <button
+        type="button"
+        className={styles.sandboxTriggerPill}
+        onClick={() => setIsOpen(true)}
+        aria-label="Open GRAP Policy Sandbox"
+      >
+        <span className={styles.sandboxIcon}>⚡</span>
+        <span>GRAP Policy Simulator</span>
+      </button>
+    );
+  }
+
   return (
     <aside className={styles.sandbox} aria-label="Policy mitigation sandbox">
       <div className={styles.panelHeader}>
-        <span className={styles.panelIcon}>∫</span>
-        <div>
-          <h2>Policy Sandbox</h2>
-          <p>Run source-control scenarios against the current baseline.</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span className={styles.panelIcon}>⚡</span>
+          <div>
+            <h2>GRAP Policy Sandbox</h2>
+            <p>Simulate source-control reductions.</p>
+          </div>
         </div>
+        <button
+          type="button"
+          className={styles.stationDrawerClose}
+          onClick={() => setIsOpen(false)}
+          aria-label="Close Policy Sandbox"
+        >
+          ✕
+        </button>
       </div>
 
       <div className={styles.controlGroup}>
