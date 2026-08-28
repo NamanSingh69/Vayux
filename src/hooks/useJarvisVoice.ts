@@ -5,7 +5,9 @@ interface UseJarvisVoiceOptions {
   onTranscript?: (text: string) => void;
 }
 
-export function useJarvisVoice({ wsUrl = 'ws://localhost:8000/ws/jarvis-live', onTranscript }: UseJarvisVoiceOptions = {}) {
+export function useJarvisVoice(options: UseJarvisVoiceOptions = {}) {
+  const wsUrl = options.wsUrl || process.env.NEXT_PUBLIC_WS_URL || "wss://vayux.onrender.com/ws/jarvis-live";
+
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -18,7 +20,7 @@ export function useJarvisVoice({ wsUrl = 'ws://localhost:8000/ws/jarvis-live', o
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
   const isPlayingRef = useRef(false);
 
-  const playNextAudioChunk = useCallback(async () => {
+  const playNextAudioChunk = useCallback(async function playNext() {
     if (audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
       setIsSpeaking(false);
@@ -28,12 +30,12 @@ export function useJarvisVoice({ wsUrl = 'ws://localhost:8000/ws/jarvis-live', o
     isPlayingRef.current = true;
     setIsSpeaking(true);
     const chunk = audioQueueRef.current.shift()!;
-    
+
     if (!audioContextRef.current) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       audioContextRef.current = new AudioCtx({ sampleRate: 24000 });
     }
-    
+
     const ctx = audioContextRef.current;
     if (ctx.state === 'suspended') {
       await ctx.resume();
@@ -41,7 +43,7 @@ export function useJarvisVoice({ wsUrl = 'ws://localhost:8000/ws/jarvis-live', o
     const pcmData = new Int16Array(chunk);
     const audioBuffer = ctx.createBuffer(1, pcmData.length, 24000);
     const channelData = audioBuffer.getChannelData(0);
-    
+
     for (let i = 0; i < pcmData.length; i++) {
       channelData[i] = pcmData[i] / 32768.0;
     }
@@ -50,7 +52,7 @@ export function useJarvisVoice({ wsUrl = 'ws://localhost:8000/ws/jarvis-live', o
     source.buffer = audioBuffer;
     source.connect(ctx.destination);
     source.onended = () => {
-      playNextAudioChunk();
+      playNext();
     };
     source.start();
   }, []);
@@ -73,7 +75,7 @@ export function useJarvisVoice({ wsUrl = 'ws://localhost:8000/ws/jarvis-live', o
           const msg = JSON.parse(event.data);
           if (msg.type === 'transcript') {
             setTranscript((prev) => (prev ? prev + ' ' + msg.text : msg.text));
-            onTranscript?.(msg.text);
+            options.onTranscript?.(msg.text);
           }
         } catch {
           // ignore non-json messages
@@ -87,7 +89,7 @@ export function useJarvisVoice({ wsUrl = 'ws://localhost:8000/ws/jarvis-live', o
     };
 
     wsRef.current = ws;
-  }, [wsUrl, onTranscript, playNextAudioChunk]);
+  }, [wsUrl, options, playNextAudioChunk]);
 
   const startListening = async () => {
     connect();
